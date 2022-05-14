@@ -25,6 +25,10 @@ struct Args {
     #[clap(short, long, default_value_t = 3.67)]
     density: f64,
 
+    /// Full width at half maximum (FWHM) of the detector, in keV
+    #[clap(long, default_value_t = 6.0)]
+    fwhm: f64,
+
     /// X coordinate of the emitter
     #[clap(long, default_value_t = 3.0)]
     rx: f64,

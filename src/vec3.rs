@@ -33,7 +33,7 @@ impl<T> Vector<T> {
     /// * `phi` - Azimuth angle, in the range \[0, 2𝜋\]
     /// # Comments
     /// * `radius` is allowed to be negative, but if it is, then the vector will face in the opposite direction
-    fn from_spherical(radius: T, theta: T, phi: T) -> Vector<T>
+    pub fn from_spherical(radius: T, theta: T, phi: T) -> Vector<T>
     where
         T: num::traits::Float,
     {
@@ -46,7 +46,7 @@ impl<T> Vector<T> {
     }
 
     /// Returns a [Spherical] with the spherical coordinates of the vector.
-    fn spherical(&self) -> Spherical<T>
+    pub fn to_spherical(&self) -> Spherical<T>
     where
         T: num::traits::Float,
     {
@@ -58,56 +58,56 @@ impl<T> Vector<T> {
         }
     }
 
-    fn dot(&self, other: &Self) -> T
+    pub fn dot(&self, other: &Self) -> T
     where
         T: std::ops::Mul<Output = T> + std::ops::Add<Output = T> + Copy,
     {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
-    fn angle(&self, other: &Self) -> T
+    pub fn angle(&self, other: &Self) -> T
     where
         T: num::traits::Float,
     {
         (self.dot(other) / (self.mag() * other.mag())).acos()
     }
 
-    fn mag_sq(&self) -> T
+    pub fn mag_sq(&self) -> T
     where
         T: std::ops::Mul<Output = T> + std::ops::Add<Output = T> + Copy,
     {
         self.x * self.x + self.y + self.y + self.z * self.z
     }
 
-    fn mag(&self) -> T
+    pub fn mag(&self) -> T
     where
         T: std::ops::Mul<Output = T> + std::ops::Add<Output = T> + num::traits::Float,
     {
         (self.x * self.x + self.y + self.y + self.z * self.z).sqrt()
     }
 
-    fn set_mag(&mut self, new_mag: T)
+    pub fn set_mag(&mut self, new_mag: T)
     where
         T: num::traits::Float,
     {
         *self = *self * (new_mag / self.mag());
     }
 
-    fn normalize(&mut self)
+    pub fn normalize(&mut self)
     where
         T: num::traits::Float,
     {
         *self = *self / self.mag();
     }
 
-    fn normalized(&self) -> Self
+    pub fn normalized(&self) -> Self
     where
         T: num::traits::Float,
     {
         *self / self.mag()
     }
 
-    fn random_isotropic_normed() -> Vector<T>
+    pub fn random_isotropic_normed() -> Vector<T>
     where
         T: crate::rand_gen::RandGen + num::traits::Float,
         f64: Into<T>,
@@ -127,42 +127,6 @@ impl<T> Vector<T> {
             x: 1.0.into() - 2.0.into() * rhosq,
             y: 2.0.into() * u * sqrt_part,
             z: 2.0.into() * v * sqrt_part,
-        }
-    }
-
-    fn random_uniform_normed_f32() -> Vector<f32> {
-        let mut rhosq: f32;
-        let mut u: f32;
-        let mut v: f32;
-        while {
-            u = fastrand::f32() * 2.0 - 1.0;
-            v = fastrand::f32() * 2.0 - 1.0;
-            rhosq = u * u + v * v;
-            rhosq > 1.0
-        } {}
-        let sqrt_part = (1.0 - rhosq).sqrt();
-        Vector::<f32> {
-            x: 1.0 - 2.0 * rhosq,
-            y: 2.0 * u * sqrt_part,
-            z: 2.0 * v * sqrt_part,
-        }
-    }
-
-    fn random_uniform_normed_f64() -> Vector<f64> {
-        let mut rhosq: f64;
-        let mut u: f64;
-        let mut v: f64;
-        while {
-            u = fastrand::f64() * 2.0 - 1.0;
-            v = fastrand::f64() * 2.0 - 1.0;
-            rhosq = u * u + v * v;
-            rhosq > 1.0
-        } {}
-        let sqrt_part = (1.0 - rhosq).sqrt();
-        Vector::<f64> {
-            x: 1.0 - 2.0 * rhosq,
-            y: 2.0 * u * sqrt_part,
-            z: 2.0 * v * sqrt_part,
         }
     }
 }

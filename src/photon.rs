@@ -47,6 +47,7 @@ enum PhotonStep {
     Exit,
 }
 
+#[derive(PartialEq)]
 enum PhotonLocation {
     OutsideMisses,
     OutsideInto(F),
@@ -183,5 +184,51 @@ impl Photon {
             return PhotonLocation::OutsideInto(forward_dist.unwrap());
         }
         PhotonLocation::Inside(forward_dist.unwrap())
+    }
+
+    fn sample_free_path(&self) -> F {
+        // TODO
+        0.5
+    }
+
+    fn sample_new_direction(&mut self) {
+        // TODO
+        self.dir = Vector::random_isotropic_normed();
+    }
+
+    fn move_by(&mut self, dist: F) {
+        self.pos += self.dir * dist;
+    }
+
+    fn move_inside(&mut self, inside_wall_dist: F) -> (bool, F) {
+        let free_path = self.sample_free_path();
+        self.move_by(free_path);
+        if free_path < inside_wall_dist {
+            self.sample_new_direction();
+            return (true, 30.0);
+        } else {
+            return (false, 0.0);
+        }
+    }
+
+    /// Simulates the path of the photon, and we return how much energy it gives off to the detector
+    fn simulate(&mut self) -> F {
+        let mut location = self.intersect_detector();
+        let mut energy_transfered = 0.0;
+        while location != PhotonLocation::OutsideMisses {
+            match location {
+                PhotonLocation::OutsideInto(dist) => self.move_by(dist),
+                PhotonLocation::Inside(dist) => {
+                    let move_result = self.move_inside(dist);
+                    energy_transfered += move_result.1;
+                    if !move_result.0 {
+                        return energy_transfered;
+                    }
+                }
+                PhotonLocation::OutsideMisses => return energy_transfered,
+            }
+            location = self.intersect_detector();
+        }
+        0.0
     }
 }

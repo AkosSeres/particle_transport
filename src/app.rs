@@ -1,5 +1,7 @@
 use eframe::egui::{self, RichText};
 
+use crate::photon::set_detector;
+
 /// Simulates the transport of the photons of a monoenergetic gamma-source inside a scintillation detector.
 #[derive(Debug)]
 pub struct MyArgs {
@@ -38,6 +40,29 @@ impl Default for MyArgs {
 
 pub struct MyApp {
     pub arguments: MyArgs,
+    pub simulation_running: bool,
+}
+
+impl MyApp {
+    pub fn init(&self) {
+        set_detector(
+            self.arguments.radius,
+            self.arguments.height,
+            self.arguments.density,
+        );
+    }
+
+    fn start_stop_simulation(&mut self) {
+        if !self.simulation_running {
+            set_detector(
+                self.arguments.radius,
+                self.arguments.height,
+                self.arguments.density,
+            );
+        }
+
+        self.simulation_running = !self.simulation_running;
+    }
 }
 
 impl eframe::App for MyApp {
@@ -55,44 +80,64 @@ impl eframe::App for MyApp {
                 ui.heading(RichText::from("Detector size:").size(18.0));
                 egui::Grid::new("detector_size_settings_grid").show(ui, |ui| {
                     ui.label("Radius: ");
-                    ui.add(egui::Slider::new(&mut self.arguments.radius, 0.5..=12.0).text("cm"));
+                    ui.add_enabled(
+                        !self.simulation_running,
+                        egui::Slider::new(&mut self.arguments.radius, 0.5..=12.0).text("cm"),
+                    );
                     ui.end_row();
                     ui.label("Height: ");
-                    ui.add(egui::Slider::new(&mut self.arguments.height, 0.5..=12.0).text("cm"));
+                    ui.add_enabled(
+                        !self.simulation_running,
+                        egui::Slider::new(&mut self.arguments.height, 0.5..=12.0).text("cm"),
+                    );
                     ui.end_row();
                 });
 
                 ui.heading(RichText::from("Emitter position coordinates:").size(18.0));
                 egui::Grid::new("emitter_position_grid").show(ui, |ui| {
                     ui.label("X: ");
-                    ui.add(egui::Slider::new(&mut self.arguments.rx, -10.0..=10.0).text("cm"));
+                    ui.add_enabled(
+                        !self.simulation_running,
+                        egui::Slider::new(&mut self.arguments.rx, -10.0..=10.0).text("cm"),
+                    );
                     ui.end_row();
                     ui.label("Y: ");
-                    ui.add(egui::Slider::new(&mut self.arguments.ry, -10.0..=10.0).text("cm"));
+                    ui.add_enabled(
+                        !self.simulation_running,
+                        egui::Slider::new(&mut self.arguments.ry, -10.0..=10.0).text("cm"),
+                    );
                     ui.end_row();
                     ui.label("Z: ");
-                    ui.add(egui::Slider::new(&mut self.arguments.rz, -10.0..=10.0).text("cm"));
+                    ui.add_enabled(
+                        !self.simulation_running,
+                        egui::Slider::new(&mut self.arguments.rz, -10.0..=10.0).text("cm"),
+                    );
                     ui.end_row();
                 });
 
                 ui.heading(RichText::from("Other settings:").size(18.0));
                 egui::Grid::new("other_settings_gui").show(ui, |ui| {
                     ui.label("Photon energy: ");
-                    ui.add(
+                    ui.add_enabled(
+                        !self.simulation_running,
                         egui::Slider::new(&mut self.arguments.energy, 200.0..=2500.0).text("keV"),
                     );
                     ui.end_row();
                     ui.label("FWHM: ");
-                    ui.add(egui::Slider::new(&mut self.arguments.fwhm, 0.0..=100.0).text("keV"));
+                    ui.add_enabled(
+                        !self.simulation_running,
+                        egui::Slider::new(&mut self.arguments.fwhm, 0.0..=100.0).text("keV"),
+                    );
                     ui.end_row();
                     ui.label("Detector density: ");
-                    ui.add(
+                    ui.add_enabled(
+                        !self.simulation_running,
                         egui::Slider::new(&mut self.arguments.density, 0.1..=20.0).text("g/cm³"),
                     );
                     ui.end_row();
                 });
 
-                egui::ScrollArea::vertical().show(ui, |ui| {
+                /*egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.heading(RichText::from("Views:").size(18.0));
                     let halfrange = self
                         .arguments
@@ -214,16 +259,25 @@ impl eframe::App for MyApp {
                                 plot_ui.points(point);
                             });
                     });
-                });
+                });*/
 
                 ui.vertical_centered(|ui| {
                     ui.add_space(15.0);
 
+                    let start_stop_text = if self.simulation_running {
+                        "Stop simulation"
+                    } else {
+                        "Start simulation"
+                    };
                     let start_button = egui::widgets::Button::new(
-                        RichText::new("Start simulation").strong().size(18.0),
+                        RichText::new(start_stop_text).strong().size(18.0),
                     );
                     if ui.add(start_button).clicked() {
-                        println!("Simulation is wanting to start!")
+                        self.start_stop_simulation();
+                    }
+                    if self.simulation_running {
+                        ui.add_space(5.0);
+                        ui.add(egui::Spinner::default());
                     }
                 });
             });
@@ -245,6 +299,7 @@ impl Default for MyApp {
     fn default() -> Self {
         Self {
             arguments: MyArgs::default(),
+            simulation_running: false,
         }
     }
 }

@@ -2,6 +2,7 @@
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
+    particle_transport::app::MyApp::default().init();
     let mut options = eframe::NativeOptions::default();
     options.vsync = true;
     options.transparent = false;

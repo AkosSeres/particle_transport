@@ -36,7 +36,7 @@ fn get_detector_ztop() -> F {
 }
 
 /// Describes what happens to the photon in the simulation step
-enum PhotonStep {
+pub enum PhotonStep {
     /// Completely misses the detector
     Miss,
     /// Enters the detector

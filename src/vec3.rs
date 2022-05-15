@@ -8,7 +8,7 @@ pub struct Vector<T> {
 
 /// Struct for representing a 3D vector in spherical coordinates.
 #[derive(Debug, Copy, Clone, PartialEq)]
-struct Spherical<T> {
+pub struct Spherical<T> {
     /// The magnitude (radius) of the vector.
     radius: T,
     /// Angle of inclination

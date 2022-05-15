@@ -1,12 +1,11 @@
 #![warn(clippy::all, rust_2018_idioms)]
 
-pub use eframe;
-pub mod main;
+pub mod app;
 pub mod photon;
 pub mod rand_gen;
 pub mod vec3;
-pub use main::Args;
-pub use main::MyApp;
+
+pub use eframe;
 
 // ----------------------------------------------------------------------------
 // When compiling for web:
@@ -27,21 +26,5 @@ pub fn start(canvas_id: &str) -> Result<(), eframe::wasm_bindgen::JsValue> {
     // Redirect tracing to console.log and friends:
     tracing_wasm::set_as_global_default();
 
-    eframe::start_web(
-        canvas_id,
-        Box::new(|cc| {
-            Box::new(MyApp {
-                arguments: Args {
-                    radius: 2.5,
-                    height: 3.0,
-                    energy: 661.7,
-                    density: 3.67,
-                    fwhm: 6.0,
-                    rx: 3.0,
-                    ry: -3.0,
-                    rz: 2.0,
-                },
-            })
-        }),
-    )
+    eframe::start_web(canvas_id, Box::new(|cc| Box::new(app::MyApp::default())))
 }

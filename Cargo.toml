@@ -3,6 +3,7 @@ name = "particle_transport"
 default-run = "particle_transport_bin"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.60"
 
 [[bin]]
 name = "particle_transport_bin"
@@ -12,7 +13,6 @@ path = "src/main.rs"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-clap = {version = "3.1.18", features = ["derive"]}
 eframe = "0.18.0"
 fastrand = "1.7.0"
 num = "0.4.0"

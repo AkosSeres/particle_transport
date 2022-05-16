@@ -1,4 +1,9 @@
-use eframe::egui::{self, RichText};
+use std::{fmt::Arguments, sync::atomic::AtomicU64};
+
+use eframe::{
+    egui::{self, RichText},
+    epaint::Color32,
+};
 
 use crate::photon::set_detector;
 
@@ -41,6 +46,9 @@ impl Default for MyArgs {
 pub struct MyApp {
     pub arguments: MyArgs,
     pub simulation_running: bool,
+    /// The number of channels of the spectrometer
+    channel_number: usize,
+    channels: Vec<AtomicU64>,
 }
 
 impl MyApp {
@@ -50,6 +58,10 @@ impl MyApp {
             self.arguments.height,
             self.arguments.density,
         );
+    }
+
+    fn get_max_energy(&self) -> f64 {
+        self.arguments.energy + self.arguments.fwhm * 5.0
     }
 
     fn start_stop_simulation(&mut self) {
@@ -283,23 +295,41 @@ impl eframe::App for MyApp {
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            let sin = (0..1000).map(|i| {
-                let x = i as f64 * 0.01;
-                egui::plot::Value::new(x, x.sin())
-            });
-            let line = egui::plot::Line::new(egui::plot::Values::from_values_iter(sin));
+            let channel_width = self.get_max_energy() / self.channel_number as f64;
+
+            let bars = self
+                .channels
+                .iter()
+                .enumerate()
+                .map(|(ch_num, ch_count)| {
+                    egui::plot::Bar::new(
+                        ch_num as f64 * channel_width,
+                        ch_count.load(std::sync::atomic::Ordering::Relaxed) as f64,
+                    )
+                    .fill(Color32::BLUE)
+                })
+                .collect();
+
+            let spectrum_chart = egui::plot::BarChart::new(bars);
+
             egui::plot::Plot::new("main_plot_spectrum")
                 .allow_zoom(true)
-                .show(ui, |plot_ui| plot_ui.line(line));
+                .include_x(self.get_max_energy())
+                .show(ui, |plot_ui| plot_ui.bar_chart(spectrum_chart));
         });
     }
 }
 
 impl Default for MyApp {
     fn default() -> Self {
+        let default_channel_number = 1024;
         Self {
             arguments: MyArgs::default(),
             simulation_running: false,
+            channel_number: default_channel_number,
+            channels: (0..default_channel_number)
+                .map(|_| AtomicU64::new(0))
+                .collect(),
         }
     }
 }

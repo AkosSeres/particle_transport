@@ -1,11 +1,17 @@
-use std::{fmt::Arguments, sync::atomic::AtomicU64};
-
+use crate::photon::set_detector;
 use eframe::{
     egui::{self, RichText},
     epaint::Color32,
 };
-
-use crate::photon::set_detector;
+use std::sync::{
+    atomic::{
+        AtomicBool, AtomicU64,
+        Ordering::{Relaxed, SeqCst},
+    },
+    Arc,
+};
+#[cfg(not(target_arch = "wasm32"))]
+use std::thread;
 
 /// Simulates the transport of the photons of a monoenergetic gamma-source inside a scintillation detector.
 #[derive(Debug)]
@@ -45,10 +51,10 @@ impl Default for MyArgs {
 
 pub struct MyApp {
     pub arguments: MyArgs,
-    pub simulation_running: bool,
+    pub simulation_running: Arc<AtomicBool>,
     /// The number of channels of the spectrometer
     channel_number: usize,
-    channels: Vec<AtomicU64>,
+    channels: Arc<Vec<AtomicU64>>,
 }
 
 impl MyApp {
@@ -64,21 +70,91 @@ impl MyApp {
         self.arguments.energy + self.arguments.fwhm * 5.0
     }
 
+    fn register_hit(&mut self, energy_hit_size: f64) {
+        if energy_hit_size < 0.0 {
+            return;
+        }
+        let channel_width = self.get_max_energy() / (self.channel_number as f64);
+        let idx = (energy_hit_size / channel_width).floor() as usize;
+        if idx >= self.channel_number {
+            return;
+        }
+        self.channels[idx].fetch_add(1, Relaxed);
+    }
+
     fn start_stop_simulation(&mut self) {
-        if !self.simulation_running {
+        if !self.simulation_running.load(SeqCst) {
             set_detector(
                 self.arguments.radius,
                 self.arguments.height,
                 self.arguments.density,
             );
+            self.start_simulation();
+        } else {
+            self.stop_simulation();
+        }
+    }
+
+    fn start_simulation(&mut self) {
+        self.reset_spectrum();
+        let max_energy = self.get_max_energy();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        for _ in 0..num_cpus::get() {
+            let channels = self.channels.clone();
+            let simulation_running = self.simulation_running.clone();
+            thread::spawn(move || loop {
+                for _ in 0..100000 {
+                    let energy_hit_size = fastrand::f64() * max_energy;
+                    if energy_hit_size < 0.0 {
+                        return;
+                    }
+                    let channel_width = max_energy / (channels.len() as f64);
+                    let idx = (energy_hit_size / channel_width).floor() as usize;
+                    if idx >= channels.len() {
+                        return;
+                    }
+                    channels[idx].fetch_add(1, Relaxed);
+                }
+
+                if !simulation_running.load(Relaxed) {
+                    return;
+                }
+            });
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let channels = self.channels.clone();
+            for _ in 0..1000000 {
+                let energy_hit_size = js_sys::Math::random() * max_energy;
+                if energy_hit_size < 0.0 {
+                    return;
+                }
+                let channel_width = max_energy / (channels.len() as f64);
+                let idx = (energy_hit_size / channel_width).floor() as usize;
+                if idx >= channels.len() {
+                    return;
+                }
+                channels[idx].fetch_add(1, Relaxed);
+            }
         }
 
-        self.simulation_running = !self.simulation_running;
+        #[cfg(not(target_arch = "wasm32"))]
+        self.simulation_running.store(true, SeqCst);
+    }
+
+    fn stop_simulation(&mut self) {
+        self.simulation_running.store(false, SeqCst);
+    }
+
+    fn reset_spectrum(&mut self) {
+        self.channels.iter().for_each(|ch| ch.store(0, SeqCst));
     }
 }
 
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let simulation_running = self.simulation_running.load(Relaxed);
         ctx.set_visuals(egui::style::Visuals::dark());
         egui::SidePanel::right("main_settings_panel")
             .resizable(false)
@@ -93,13 +169,13 @@ impl eframe::App for MyApp {
                 egui::Grid::new("detector_size_settings_grid").show(ui, |ui| {
                     ui.label("Radius: ");
                     ui.add_enabled(
-                        !self.simulation_running,
+                        !simulation_running,
                         egui::Slider::new(&mut self.arguments.radius, 0.5..=12.0).text("cm"),
                     );
                     ui.end_row();
                     ui.label("Height: ");
                     ui.add_enabled(
-                        !self.simulation_running,
+                        !simulation_running,
                         egui::Slider::new(&mut self.arguments.height, 0.5..=12.0).text("cm"),
                     );
                     ui.end_row();
@@ -109,19 +185,19 @@ impl eframe::App for MyApp {
                 egui::Grid::new("emitter_position_grid").show(ui, |ui| {
                     ui.label("X: ");
                     ui.add_enabled(
-                        !self.simulation_running,
+                        !simulation_running,
                         egui::Slider::new(&mut self.arguments.rx, -10.0..=10.0).text("cm"),
                     );
                     ui.end_row();
                     ui.label("Y: ");
                     ui.add_enabled(
-                        !self.simulation_running,
+                        !simulation_running,
                         egui::Slider::new(&mut self.arguments.ry, -10.0..=10.0).text("cm"),
                     );
                     ui.end_row();
                     ui.label("Z: ");
                     ui.add_enabled(
-                        !self.simulation_running,
+                        !simulation_running,
                         egui::Slider::new(&mut self.arguments.rz, -10.0..=10.0).text("cm"),
                     );
                     ui.end_row();
@@ -131,19 +207,19 @@ impl eframe::App for MyApp {
                 egui::Grid::new("other_settings_gui").show(ui, |ui| {
                     ui.label("Photon energy: ");
                     ui.add_enabled(
-                        !self.simulation_running,
+                        !simulation_running,
                         egui::Slider::new(&mut self.arguments.energy, 200.0..=2500.0).text("keV"),
                     );
                     ui.end_row();
                     ui.label("FWHM: ");
                     ui.add_enabled(
-                        !self.simulation_running,
+                        !simulation_running,
                         egui::Slider::new(&mut self.arguments.fwhm, 0.0..=100.0).text("keV"),
                     );
                     ui.end_row();
                     ui.label("Detector density: ");
                     ui.add_enabled(
-                        !self.simulation_running,
+                        !simulation_running,
                         egui::Slider::new(&mut self.arguments.density, 0.1..=20.0).text("g/cm³"),
                     );
                     ui.end_row();
@@ -276,7 +352,7 @@ impl eframe::App for MyApp {
                 ui.vertical_centered(|ui| {
                     ui.add_space(15.0);
 
-                    let start_stop_text = if self.simulation_running {
+                    let start_stop_text = if simulation_running {
                         "Stop simulation"
                     } else {
                         "Start simulation"
@@ -287,10 +363,14 @@ impl eframe::App for MyApp {
                     if ui.add(start_button).clicked() {
                         self.start_stop_simulation();
                     }
-                    if self.simulation_running {
+                    if simulation_running {
                         ui.add_space(5.0);
                         ui.add(egui::Spinner::default());
                     }
+                    ui.label(format!(
+                        "{}",
+                        self.channels.iter().map(|ch| ch.load(Relaxed)).sum::<u64>()
+                    ));
                 });
             });
 
@@ -304,7 +384,7 @@ impl eframe::App for MyApp {
                 .map(|(ch_num, ch_count)| {
                     egui::plot::Bar::new(
                         ch_num as f64 * channel_width,
-                        ch_count.load(std::sync::atomic::Ordering::Relaxed) as f64,
+                        ch_count.load(Relaxed) as f64,
                     )
                     .fill(Color32::BLUE)
                 })
@@ -325,11 +405,13 @@ impl Default for MyApp {
         let default_channel_number = 1024;
         Self {
             arguments: MyArgs::default(),
-            simulation_running: false,
+            simulation_running: Arc::new(AtomicBool::new(false)),
             channel_number: default_channel_number,
-            channels: (0..default_channel_number)
-                .map(|_| AtomicU64::new(0))
-                .collect(),
+            channels: Arc::new(
+                (0..default_channel_number)
+                    .map(|_| AtomicU64::new(0))
+                    .collect(),
+            ),
         }
     }
 }

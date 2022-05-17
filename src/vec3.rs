@@ -18,7 +18,7 @@ pub struct Spherical<T> {
 }
 
 impl<T> Vector<T> {
-    fn new(x_: T, y_: T, z_: T) -> Vector<T> {
+    pub fn new(x_: T, y_: T, z_: T) -> Vector<T> {
         Vector::<T> {
             x: x_,
             y: y_,
@@ -128,6 +128,27 @@ impl<T> Vector<T> {
             y: 2.0.into() * u * sqrt_part,
             z: 2.0.into() * v * sqrt_part,
         }
+    }
+
+    pub fn rotate_random_by_angle(&mut self, angle: T)
+    where
+        T: crate::rand_gen::RandGen + num::traits::Float,
+        f64: Into<T>,
+        f32: Into<T>,
+    {
+        let theta = angle;
+        let phi = T::rand() * 3.141592653589793.into() * 2.0.into();
+        let (u, v, w) = (self.x, self.y, self.z);
+        let sincos = theta.sin() * phi.cos();
+        let sinsin = theta.sin() * phi.sin();
+        let coss = theta.cos();
+        let sqpart = (u * u + v * v).sqrt();
+        let new_v = Self {
+            x: sincos * v / sqpart + u * v * sinsin / sqpart + u * coss,
+            y: -u * sincos / sqpart + v * w * sinsin / sqpart + v * coss,
+            z: -sqpart * sinsin + w * coss,
+        };
+        *self = new_v;
     }
 }
 

@@ -32,3 +32,6 @@ js-sys = "0.3.57"
 
 [profile.release]
 opt-level = 2 # fast and small wasm
+
+[dev-dependencies]
+gnuplot = "0.0.37"

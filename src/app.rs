@@ -1,4 +1,7 @@
-use crate::photon::set_detector;
+use crate::{
+    photon::{set_detector, Photon, F},
+    vec3::Vector,
+};
 use eframe::{
     egui::{self, RichText},
     epaint::Color32,
@@ -67,7 +70,7 @@ impl MyApp {
     }
 
     fn get_max_energy(&self) -> f64 {
-        self.arguments.energy + self.arguments.fwhm * 5.0
+        self.arguments.energy + self.arguments.fwhm * 10.0
     }
 
     fn register_hit(&mut self, energy_hit_size: f64) {
@@ -103,16 +106,27 @@ impl MyApp {
         for _ in 0..num_cpus::get() {
             let channels = self.channels.clone();
             let simulation_running = self.simulation_running.clone();
+            let energy = self.arguments.energy;
+            let (rx, ry, rz) = (self.arguments.rx, self.arguments.ry, self.arguments.rz);
+            let fwhm = self.arguments.fwhm;
             thread::spawn(move || loop {
                 for _ in 0..100000 {
-                    let energy_hit_size = fastrand::f64() * max_energy;
-                    if energy_hit_size < 0.0 {
-                        return;
+                    let mut random_photon = Photon {
+                        energy,
+                        pos: Vector::<F>::new(rx, ry, rz),
+                        dir: Vector::<F>::random_isotropic_normed(),
+                    };
+                    let mut energy_hit_size = random_photon.simulate();
+                    if energy_hit_size <= 0.0 {
+                        continue;
+                    }
+                    for _ in 0..12 {
+                        energy_hit_size += (fastrand::f64() - 0.5) * fwhm;
                     }
                     let channel_width = max_energy / (channels.len() as f64);
                     let idx = (energy_hit_size / channel_width).floor() as usize;
                     if idx >= channels.len() {
-                        return;
+                        continue;
                     }
                     channels[idx].fetch_add(1, Relaxed);
                 }

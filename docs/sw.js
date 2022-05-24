@@ -1,9 +1,9 @@
 var cacheName = 'egui-template-pwa';
 var filesToCache = [
-  './',
-  './index.html',
-  './particle_transport.js',
-  './particle_transport_bg.wasm',
+  //'./',
+  //'./index.html',
+  //'./particle_transport.js',
+  //'./particle_transport_bg.wasm',
 ];
 
 /* Start the service worker and cache all of the app's content */
@@ -16,10 +16,10 @@ self.addEventListener('install', function (e) {
 });
 
 /* Serve cached content when offline */
-self.addEventListener('fetch', function (e) {
+/*self.addEventListener('fetch', function (e) {
   e.respondWith(
     caches.match(e.request).then(function (response) {
       return response || fetch(e.request);
     })
   );
-});
+});*/

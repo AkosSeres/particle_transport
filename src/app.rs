@@ -136,24 +136,7 @@ impl MyApp {
                 }
             });
         }
-        #[cfg(target_arch = "wasm32")]
-        {
-            let channels = self.channels.clone();
-            for _ in 0..1000000 {
-                let energy_hit_size = js_sys::Math::random() * max_energy;
-                if energy_hit_size < 0.0 {
-                    return;
-                }
-                let channel_width = max_energy / (channels.len() as f64);
-                let idx = (energy_hit_size / channel_width).floor() as usize;
-                if idx >= channels.len() {
-                    return;
-                }
-                channels[idx].fetch_add(1, Relaxed);
-            }
-        }
 
-        #[cfg(not(target_arch = "wasm32"))]
         self.simulation_running.store(true, SeqCst);
     }
 
@@ -411,6 +394,49 @@ impl eframe::App for MyApp {
                 .include_x(self.get_max_energy())
                 .show(ui, |plot_ui| plot_ui.bar_chart(spectrum_chart));
         });
+
+        #[cfg(target_arch = "wasm32")]
+        if simulation_running {
+            loop {
+                let start_time = instant::Instant::now();
+                let max_energy = self.get_max_energy();
+                for _ in 0..100000 {
+                    let mut random_photon = Photon {
+                        energy: self.arguments.energy,
+                        pos: Vector::<F>::new(
+                            self.arguments.rx,
+                            self.arguments.ry,
+                            self.arguments.rz,
+                        ),
+                        dir: Vector::<F>::random_isotropic_normed(),
+                    };
+                    let mut energy_hit_size = random_photon.simulate();
+                    if energy_hit_size <= 0.0 {
+                        continue;
+                    }
+                    for _ in 0..12 {
+                        energy_hit_size += (js_sys::Math::random() - 0.5) * self.arguments.fwhm;
+                    }
+                    let channel_width = max_energy / (self.channels.len() as f64);
+                    let idx = (energy_hit_size / channel_width).floor() as usize;
+                    if idx >= self.channels.len() {
+                        continue;
+                    }
+                    self.channels[idx].fetch_add(1, Relaxed);
+                }
+                let end_time = instant::Instant::now();
+                print!("{:?}", end_time - start_time);
+                web_sys::console::log(&js_sys::Array::from(
+                    &eframe::wasm_bindgen::JsValue::from_str(&format!(
+                        "{:?}",
+                        (end_time - start_time).as_micros()
+                    )),
+                ));
+                if (end_time - start_time).as_micros() > 13_000 {
+                    break;
+                }
+            }
+        }
     }
 }
 

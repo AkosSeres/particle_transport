@@ -139,8 +139,9 @@ impl<T> Vector<T> {
         let theta = angle;
         let phi = T::rand() * 3.141592653589793.into() * 2.0.into();
         let (u, v, w) = (self.x, self.y, self.z);
-        let sincos = theta.sin() * phi.cos();
-        let sinsin = theta.sin() * phi.sin();
+        let thetasin = theta.sin();
+        let sincos = thetasin * phi.cos();
+        let sinsin = thetasin * phi.sin();
         let coss = theta.cos();
         let sqpart = (u * u + v * v).sqrt();
         let new_v = Self {

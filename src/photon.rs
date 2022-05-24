@@ -133,54 +133,55 @@ impl Photon {
         Some(((-b - diff) / 2.0 / a, (-b + diff) / 2.0 / a))
     }
 
-    /// Intersects the path of the photon with the cylinder of the detector and if they intersect, it returns the distances (both the entering distance and the exit distance as well).
-    pub fn intersect_cylinder(&self) -> (Option<F>, Option<F>) {
+    /// Intersects the path of the photon with the cylinder of the detector and if they intersect, it returns the frontal distance
+    pub fn intersect_cylinder(&self) -> Option<F> {
         let a = self.dir.x * self.dir.x + self.dir.y * self.dir.y;
         let b = 2.0 * (self.pos.x * self.dir.x + self.pos.y * self.dir.y);
         let c = self.pos.x * self.pos.x + self.pos.y * self.pos.y - get_detector_rsq();
         let d = b * b - 4.0 * a * c;
         if d <= 0.0 {
-            return (None, None);
+            return None;
         }
         let diff = d.sqrt();
         let dist0 = (-b - diff) / 2.0 / a;
         let dist1 = (-b + diff) / 2.0 / a;
         let sectz_0 = self.pos.z + self.dir.z * dist0;
         let sectz_1 = self.pos.z + self.dir.z * dist1;
-        (
-            if sectz_0 <= get_detector_zbottom() || sectz_0 >= get_detector_ztop() {
-                None
+        let mut ret_dist = None;
+        if dist0 > 0.0 && sectz_0 > get_detector_zbottom() && sectz_0 < get_detector_ztop() {
+            ret_dist = Some(dist0);
+        }
+        if dist1 > 0.0 && sectz_1 > get_detector_zbottom() && sectz_1 < get_detector_ztop() {
+            if ret_dist.is_none() {
+                ret_dist = Some(dist1);
             } else {
-                Some(dist0)
-            },
-            if sectz_1 <= get_detector_zbottom() || sectz_1 >= get_detector_ztop() {
-                None
-            } else {
-                Some(dist1)
-            },
-        )
+                unsafe {
+                    if ret_dist.unwrap_unchecked() > dist1 {
+                        ret_dist = Some(dist1);
+                    }
+                }
+            }
+        }
+        ret_dist
     }
 
     pub fn intersect_detector(&self) -> PhotonLocation {
         let is_inside = self.pos.x * self.pos.x + self.pos.y * self.pos.y < get_detector_rsq()
             && self.pos.z > get_detector_zbottom()
             && self.pos.z < get_detector_ztop();
-        let mut behind_dist: Option<F> = None;
         let mut forward_dist: Option<F> = None;
         let mut process_any_dist = |d_opt: Option<F>| match d_opt {
             None => {}
             Some(new_d) => {
-                if new_d <= 0.0 {
-                    if (behind_dist.is_some() && behind_dist.unwrap() < new_d)
-                        || behind_dist.is_none()
-                    {
-                        behind_dist = Some(new_d);
-                    }
-                } else {
-                    if (forward_dist.is_some() && forward_dist.unwrap() > new_d)
-                        || forward_dist.is_none()
-                    {
+                if new_d > 0.0 {
+                    if forward_dist.is_none() {
                         forward_dist = Some(new_d);
+                    } else {
+                        unsafe {
+                            if forward_dist.unwrap_unchecked() > new_d {
+                                forward_dist = Some(new_d);
+                            }
+                        }
                     }
                 }
             }
@@ -189,20 +190,20 @@ impl Photon {
         // Make intersections and process them
         process_any_dist(self.intersect_bottom_base());
         process_any_dist(self.intersect_top_base());
-        let cylinder_dists = self.intersect_cylinder();
-        process_any_dist(cylinder_dists.0);
-        process_any_dist(cylinder_dists.1);
+        process_any_dist(self.intersect_cylinder());
 
-        if forward_dist.is_none() && !is_inside {
-            return PhotonLocation::OutsideMisses;
+        if forward_dist.is_some() {
+            if is_inside {
+                unsafe {
+                    return PhotonLocation::Inside(forward_dist.unwrap_unchecked());
+                }
+            } else {
+                unsafe {
+                    return PhotonLocation::OutsideInto(forward_dist.unwrap_unchecked());
+                }
+            }
         }
-        if is_inside && forward_dist.is_some() {
-            return PhotonLocation::Inside(forward_dist.unwrap());
-        } else if forward_dist.is_some() {
-            return PhotonLocation::OutsideInto(forward_dist.unwrap());
-        } else {
-            return PhotonLocation::OutsideMisses;
-        }
+        return PhotonLocation::OutsideMisses;
     }
 
     fn sample_free_path_and_interaction_type(&self) -> (F, InteractionType)
@@ -213,25 +214,15 @@ impl Photon {
         let cross_section_sum_macroscopic = cross_sections.3 * get_detector_density();
         let free_path = -(1.0 / cross_section_sum_macroscopic) * F::rand().ln();
 
-        if self.energy > 1022.0 {
-            let interaction_coeff = cross_sections.3 * F::rand();
-            let interaction_type = if interaction_coeff <= cross_sections.0 {
-                InteractionType::ComptonScatter
-            } else if interaction_coeff <= (cross_sections.1 + cross_sections.0) {
-                InteractionType::Photoeffect
-            } else {
-                InteractionType::PairProduction
-            };
-            (free_path, interaction_type)
+        let interaction_coeff = cross_sections.3 * F::rand();
+        let interaction_type = if interaction_coeff <= cross_sections.0 {
+            InteractionType::ComptonScatter
+        } else if interaction_coeff <= (cross_sections.1 + cross_sections.0) {
+            InteractionType::Photoeffect
         } else {
-            let interaction_coeff = (cross_sections.0 + cross_sections.1) * F::rand();
-            let interaction_type = if interaction_coeff <= cross_sections.0 {
-                InteractionType::ComptonScatter
-            } else {
-                InteractionType::Photoeffect
-            };
-            (free_path, interaction_type)
-        }
+            InteractionType::PairProduction
+        };
+        (free_path, interaction_type)
     }
 
     /// Returns all of the cross sections corresponding to the given energy.
@@ -361,6 +352,7 @@ impl Photon {
         let mut energy_transfered = 0.0;
         while location != PhotonLocation::OutsideMisses {
             match location {
+                PhotonLocation::OutsideMisses => return energy_transfered,
                 PhotonLocation::OutsideInto(dist) => self.move_by(dist),
                 PhotonLocation::Inside(dist) => {
                     let move_result = self.move_inside(dist);
@@ -369,7 +361,6 @@ impl Photon {
                         return energy_transfered;
                     }
                 }
-                PhotonLocation::OutsideMisses => return energy_transfered,
             }
             location = self.intersect_detector();
         }

@@ -16,6 +16,7 @@ crate-type = ["cdylib", "rlib"]
 eframe = "0.18.0"
 fastrand = "1.7.0"
 num = "0.4.0"
+web-sys = "0.3.57"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -27,11 +28,16 @@ num_cpus = "1.13.1"
 console_error_panic_hook = "0.1.6"
 tracing-wasm = "0.2"
 js-sys = "0.3.57"
+instant = { version = "0.1.12", features = [ "stdweb", "wasm-bindgen", "inaccurate" ] }
 
+[dev-dependencies]
+gnuplot = "0.0.37"
+criterion = "0.3"
 
+[[bench]]
+name = "simulation"
+harness = false
 
 [profile.release]
 opt-level = 2 # fast and small wasm
 
-[dev-dependencies]
-gnuplot = "0.0.37"

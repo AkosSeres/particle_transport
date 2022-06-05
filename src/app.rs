@@ -406,9 +406,16 @@ impl eframe::App for MyApp {
 
         #[cfg(target_arch = "wasm32")]
         if simulation_running {
+            let photon_emit = PhotonEmitter::from_params(
+                self.arguments.radius,
+                self.arguments.height,
+                self.arguments.rx,
+                self.arguments.ry,
+                self.arguments.rz,
+            );
+            let start_time = instant::Instant::now();
+            let max_energy = self.get_max_energy();
             loop {
-                let start_time = instant::Instant::now();
-                let max_energy = self.get_max_energy();
                 for _ in 0..100000 {
                     let mut random_photon = Photon {
                         energy: self.arguments.energy,
@@ -418,6 +425,7 @@ impl eframe::App for MyApp {
                             self.arguments.rz,
                         ),
                         dir: Vector::<F>::random_isotropic_normed(),
+                        //dir: photon_emit.gen_photon_dir(),
                     };
                     let mut energy_hit_size = random_photon.simulate();
                     if energy_hit_size <= 0.0 {
@@ -434,14 +442,7 @@ impl eframe::App for MyApp {
                     self.channels[idx].fetch_add(1, Relaxed);
                 }
                 let end_time = instant::Instant::now();
-                print!("{:?}", end_time - start_time);
-                web_sys::console::log(&js_sys::Array::from(
-                    &eframe::wasm_bindgen::JsValue::from_str(&format!(
-                        "{:?}",
-                        (end_time - start_time).as_micros()
-                    )),
-                ));
-                if (end_time - start_time).as_micros() > 13_000 {
+                if (end_time - start_time).as_micros() > 30_000 {
                     break;
                 }
             }

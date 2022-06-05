@@ -326,7 +326,6 @@ impl Photon {
                     (false, self.energy)
                 }
                 InteractionType::PairProduction => {
-                    self.energy -= 1022.0;
                     let mut photon1 = Photon {
                         energy: 511.0,
                         pos: self.pos,
@@ -338,7 +337,10 @@ impl Photon {
                         dir: -photon1.dir,
                     };
 
-                    (true, photon1.simulate() + photon2.simulate())
+                    (
+                        false,
+                        self.energy - 1022.0 + photon1.simulate() + photon2.simulate(),
+                    )
                 }
             }
         } else {

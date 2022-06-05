@@ -214,7 +214,7 @@ impl eframe::App for MyApp {
                     ui.label("Photon energy: ");
                     ui.add_enabled(
                         !simulation_running,
-                        egui::Slider::new(&mut self.arguments.energy, 200.0..=2500.0).text("keV"),
+                        egui::Slider::new(&mut self.arguments.energy, 1.0..=20000.0).text("keV"),
                     );
                     ui.end_row();
                     ui.label("FWHM: ");

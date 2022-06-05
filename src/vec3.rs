@@ -151,6 +151,28 @@ impl<T> Vector<T> {
         };
         *self = new_v;
     }
+
+    pub fn rotate_random_by_angle_cosine(&mut self, angle_cosine: T)
+    where
+        T: crate::rand_gen::RandGen + num::traits::Float,
+        f64: Into<T>,
+        f32: Into<T>,
+    {
+        let theta_cos = angle_cosine;
+        let phi = T::rand() * 3.141592653589793.into() * 2.0.into();
+        let (u, v, w) = (self.x, self.y, self.z);
+        let thetasin = (-theta_cos * theta_cos + 1.0.into()).sqrt();
+        let sincos = thetasin * phi.cos();
+        let sinsin = thetasin * phi.sin();
+        let coss = theta_cos;
+        let sqpart = (u * u + v * v).sqrt();
+        let new_v = Self {
+            x: sincos * v / sqpart + u * v * sinsin / sqpart + u * coss,
+            y: -u * sincos / sqpart + v * w * sinsin / sqpart + v * coss,
+            z: -sqpart * sinsin + w * coss,
+        };
+        *self = new_v;
+    }
 }
 
 impl<T> std::ops::Add for Vector<T>

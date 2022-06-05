@@ -1,5 +1,6 @@
 use crate::{
     photon::{set_detector, Photon, F},
+    photon_emitter::{self, PhotonEmitter},
     vec3::Vector,
 };
 use eframe::{
@@ -109,12 +110,20 @@ impl MyApp {
             let energy = self.arguments.energy;
             let (rx, ry, rz) = (self.arguments.rx, self.arguments.ry, self.arguments.rz);
             let fwhm = self.arguments.fwhm;
+            let photon_emit = PhotonEmitter::from_params(
+                self.arguments.radius,
+                self.arguments.height,
+                rx,
+                ry,
+                rz,
+            );
+            let pos_vector = Vector::<F>::new(rx, ry, rz);
             thread::spawn(move || loop {
                 for _ in 0..100000 {
                     let mut random_photon = Photon {
                         energy,
-                        pos: Vector::<F>::new(rx, ry, rz),
-                        dir: Vector::<F>::random_isotropic_normed(),
+                        pos: pos_vector,
+                        dir: photon_emit.gen_photon_dir(),
                     };
                     let mut energy_hit_size = random_photon.simulate();
                     if energy_hit_size <= 0.0 {

@@ -2,6 +2,7 @@
 
 pub mod app;
 pub mod photon;
+pub mod photon_emitter;
 pub mod rand_gen;
 pub mod vec3;
 

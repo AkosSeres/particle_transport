@@ -1,6 +1,7 @@
 use crate::{
     photon::{set_detector, Photon, F},
-    photon_emitter::{self, PhotonEmitter},
+    photon_emitter::PhotonEmitter,
+    rand_gen::RandGen,
     vec3::Vector,
 };
 use eframe::{
@@ -59,6 +60,9 @@ pub struct MyApp {
     /// The number of channels of the spectrometer
     channel_number: usize,
     channels: Arc<Vec<AtomicU64>>,
+    start_instant: Option<instant::Instant>,
+    end_instant: Option<instant::Instant>,
+    logscale: bool,
 }
 
 impl MyApp {
@@ -72,18 +76,6 @@ impl MyApp {
 
     fn get_max_energy(&self) -> f64 {
         self.arguments.energy + self.arguments.fwhm * 10.0
-    }
-
-    fn register_hit(&mut self, energy_hit_size: f64) {
-        if energy_hit_size < 0.0 {
-            return;
-        }
-        let channel_width = self.get_max_energy() / (self.channel_number as f64);
-        let idx = (energy_hit_size / channel_width).floor() as usize;
-        if idx >= self.channel_number {
-            return;
-        }
-        self.channels[idx].fetch_add(1, Relaxed);
     }
 
     fn start_stop_simulation(&mut self) {
@@ -102,6 +94,8 @@ impl MyApp {
     fn start_simulation(&mut self) {
         self.reset_spectrum();
         let max_energy = self.get_max_energy();
+        self.start_instant = Some(instant::Instant::now());
+        self.end_instant = None;
 
         #[cfg(not(target_arch = "wasm32"))]
         for _ in 0..num_cpus::get() {
@@ -130,7 +124,7 @@ impl MyApp {
                         continue;
                     }
                     for _ in 0..12 {
-                        energy_hit_size += (fastrand::f64() - 0.5) * fwhm;
+                        energy_hit_size += (F::rand() - 0.5) * fwhm;
                     }
                     let channel_width = max_energy / (channels.len() as f64);
                     let idx = (energy_hit_size / channel_width).floor() as usize;
@@ -151,6 +145,7 @@ impl MyApp {
 
     fn stop_simulation(&mut self) {
         self.simulation_running.store(false, SeqCst);
+        self.end_instant = Some(instant::Instant::now());
     }
 
     fn reset_spectrum(&mut self) {
@@ -228,6 +223,9 @@ impl eframe::App for MyApp {
                         !simulation_running,
                         egui::Slider::new(&mut self.arguments.density, 0.1..=20.0).text("g/cm³"),
                     );
+                    ui.end_row();
+                    ui.label("Logarithmic scale: ");
+                    ui.add(egui::Checkbox::new(&mut self.logscale, ""));
                     ui.end_row();
                 });
 
@@ -355,6 +353,8 @@ impl eframe::App for MyApp {
                     });
                 });*/
 
+                let hits = self.channels.iter().map(|ch| ch.load(Relaxed)).sum::<u64>();
+
                 ui.vertical_centered(|ui| {
                     ui.add_space(15.0);
 
@@ -373,28 +373,74 @@ impl eframe::App for MyApp {
                         ui.add_space(5.0);
                         ui.add(egui::Spinner::default());
                     }
-                    ui.label(format!(
-                        "{}",
-                        self.channels.iter().map(|ch| ch.load(Relaxed)).sum::<u64>()
-                    ));
+                    ui.label(format!("{}", hits));
                 });
+
+                if self.start_instant.is_some() {
+                    let elpased_in_sec = if self.end_instant.is_some() {
+                        self.end_instant
+                            .unwrap()
+                            .duration_since(self.start_instant.unwrap())
+                            .as_secs_f64()
+                    } else {
+                        instant::Instant::now()
+                            .duration_since(self.start_instant.unwrap())
+                            .as_secs_f64()
+                    };
+                    let rate = if elpased_in_sec == 0.0 {
+                        0.0
+                    } else {
+                        hits as f64 / elpased_in_sec
+                    };
+                    let rate_text = if rate > 1000000.0 {
+                        format!("{:3.2}M/s", (rate / 1000000.0))
+                    } else if rate > 1000.0 {
+                        format!("{:3.2}k/s", (rate / 1000.0))
+                    } else {
+                        format!("{:3.2}/s", rate.round())
+                    };
+                    egui::Grid::new("simulation_info").show(ui, |ui| {
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new(format!("Hitrate: {}", rate_text))
+                                .strong()
+                                .size(18.0),
+                        ));
+                    });
+                }
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let channel_width = self.get_max_energy() / self.channel_number as f64;
 
-            let bars = self
-                .channels
-                .iter()
-                .enumerate()
-                .map(|(ch_num, ch_count)| {
-                    egui::plot::Bar::new(
-                        ch_num as f64 * channel_width,
-                        ch_count.load(Relaxed) as f64,
-                    )
-                    .fill(Color32::BLUE)
-                })
-                .collect();
+            let bars = if self.logscale {
+                self.channels
+                    .iter()
+                    .enumerate()
+                    .map(|(ch_num, ch_count)| {
+                        egui::plot::Bar::new(ch_num as f64 * channel_width, {
+                            let value = ch_count.load(Relaxed) as f64;
+                            if value.is_normal() {
+                                value.log10()
+                            } else {
+                                0.0
+                            }
+                        })
+                        .fill(Color32::BLUE)
+                    })
+                    .collect()
+            } else {
+                self.channels
+                    .iter()
+                    .enumerate()
+                    .map(|(ch_num, ch_count)| {
+                        egui::plot::Bar::new(
+                            ch_num as f64 * channel_width,
+                            ch_count.load(Relaxed) as f64,
+                        )
+                        .fill(Color32::BLUE)
+                    })
+                    .collect()
+            };
 
             let spectrum_chart = egui::plot::BarChart::new(bars);
 
@@ -432,7 +478,7 @@ impl eframe::App for MyApp {
                         continue;
                     }
                     for _ in 0..12 {
-                        energy_hit_size += (js_sys::Math::random() - 0.5) * self.arguments.fwhm;
+                        energy_hit_size += (F::rand() - 0.5) * self.arguments.fwhm;
                     }
                     let channel_width = max_energy / (self.channels.len() as f64);
                     let idx = (energy_hit_size / channel_width).floor() as usize;
@@ -462,6 +508,9 @@ impl Default for MyApp {
                     .map(|_| AtomicU64::new(0))
                     .collect(),
             ),
+            start_instant: None,
+            end_instant: None,
+            logscale: false,
         }
     }
 }

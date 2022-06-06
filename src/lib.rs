@@ -30,5 +30,11 @@ pub fn start(canvas_id: &str) -> Result<(), eframe::wasm_bindgen::JsValue> {
     // Set default detector values
     app::MyApp::default().init();
 
+    #[cfg(target_arch = "wasm32")]
+    {
+        use crate::rand_gen::set_rng_seed;
+        set_rng_seed(instant::now() as u64);
+    }
+
     eframe::start_web(canvas_id, Box::new(|cc| Box::new(app::MyApp::default())))
 }

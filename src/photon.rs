@@ -21,9 +21,6 @@ static mut DEFAULT_CROSS_SECTIONS: (F, F, F, F) = (
     PAIR_PRODUCTION[0],
     SUM_OF_CROSS_SECTIONS[0],
 );
-/// Default cross sections corresponding to the pair producted photons
-static mut PAIR_PRODUCTED_PHOTON_CROSS_SECTIONS: (F, F, F, F) =
-    (0.07292810000000001, 0.0161745, 0.0, 0.0891026);
 /// Sets the properties of the detector
 pub fn set_detector(r: F, height: F, density: F) {
     unsafe {
@@ -251,7 +248,7 @@ impl Photon {
     fn get_cross_sections(energy: F) -> (F, F, F, F) {
         let mut idx_low: usize = 0;
         let mut idx_high: usize = CROSS_SECTION_DATA_POINTS - 1;
-        if energy <= ENERGIES[idx_low] {
+        if energy <= ENERGIES[0] {
             return (
                 COMPTON[idx_low],
                 FOTOEFFECT[idx_low],
@@ -259,7 +256,7 @@ impl Photon {
                 SUM_OF_CROSS_SECTIONS[idx_low],
             );
         }
-        if energy >= ENERGIES[idx_high] {
+        if energy >= ENERGIES[CROSS_SECTION_DATA_POINTS - 1] {
             return (
                 COMPTON[idx_high],
                 FOTOEFFECT[idx_high],

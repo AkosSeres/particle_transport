@@ -38,5 +38,4 @@ name = "simulation"
 harness = false
 
 [profile.release]
-opt-level = 2 # fast and small wasm
-
+codegen-units = 1

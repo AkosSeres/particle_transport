@@ -42,6 +42,16 @@ pub struct MyArgs {
 impl Default for MyArgs {
     fn default() -> Self {
         Self {
+            radius: 2.0,
+            height: 4.0,
+            energy: 4000.0,
+            density: 3.67,
+            fwhm: 6.0,
+            rx: 3.0,
+            ry: 3.0,
+            rz: 3.0,
+        }
+        /*Self {
             radius: 2.5,
             height: 3.0,
             energy: 661.7,
@@ -50,7 +60,7 @@ impl Default for MyArgs {
             rx: 3.0,
             ry: -3.0,
             rz: 2.0,
-        }
+        }*/
     }
 }
 
@@ -105,7 +115,7 @@ impl MyApp {
             let simulation_running = self.simulation_running.clone();
             let energy = self.arguments.energy;
             let (rx, ry, rz) = (self.arguments.rx, self.arguments.ry, self.arguments.rz);
-            let fwhm = self.arguments.fwhm;
+            let deviation = self.arguments.fwhm / 2.3548;
             let photon_emit = PhotonEmitter::from_params(
                 self.arguments.radius,
                 self.arguments.height,
@@ -125,8 +135,9 @@ impl MyApp {
                     if energy_hit_size <= 0.0 {
                         continue;
                     }
-                    for _ in 0..12 {
-                        energy_hit_size += (F::rand() - 0.5) * fwhm;
+                    energy_hit_size += F::rand_normal_sum12() * deviation;
+                    if energy_hit_size <= 0.0 {
+                        continue;
                     }
                     let channel_width = max_energy / (channels.len() as f64);
                     let idx = (energy_hit_size / channel_width).floor() as usize;

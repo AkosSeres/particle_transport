@@ -1,5 +1,5 @@
 use crate::{
-    photon::{set_detector, Photon, F},
+    photon::{set_default_energy, set_detector, Photon, F},
     photon_emitter::PhotonEmitter,
     rand_gen::RandGen,
     vec3::Vector,
@@ -72,6 +72,7 @@ impl MyApp {
             self.arguments.height,
             self.arguments.density,
         );
+        set_default_energy(self.arguments.energy);
     }
 
     fn get_max_energy(&self) -> f64 {
@@ -85,6 +86,7 @@ impl MyApp {
                 self.arguments.height,
                 self.arguments.density,
             );
+            set_default_energy(self.arguments.energy);
             self.start_simulation();
         } else {
             self.stop_simulation();

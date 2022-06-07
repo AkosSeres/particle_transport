@@ -12,6 +12,18 @@ static mut DET_ZBOTTOM: F = -1.5;
 static mut DET_ZTOP: F = 1.5;
 /// Density of the detector material, in g/cm³
 static mut DET_DENSITY: F = 3.67;
+/// Default photon energy
+static mut DEFAULT_ENERGY: F = ENERGIES[0];
+/// Default cross sections corresponding to the default [DEFAULT_ENERGY]
+static mut DEFAULT_CROSS_SECTIONS: (F, F, F, F) = (
+    COMPTON[0],
+    FOTOEFFECT[0],
+    PAIR_PRODUCTION[0],
+    SUM_OF_CROSS_SECTIONS[0],
+);
+/// Default cross sections corresponding to the pair producted photons
+static mut PAIR_PRODUCTED_PHOTON_CROSS_SECTIONS: (F, F, F, F) =
+    (0.07292810000000001, 0.0161745, 0.0, 0.0891026);
 /// Sets the properties of the detector
 pub fn set_detector(r: F, height: F, density: F) {
     unsafe {
@@ -21,6 +33,12 @@ pub fn set_detector(r: F, height: F, density: F) {
         DET_ZBOTTOM = -0.5 * height;
         DET_ZTOP = 0.5 * height;
         DET_DENSITY = density;
+    }
+}
+pub fn set_default_energy(energy: F) {
+    unsafe {
+        DEFAULT_ENERGY = energy;
+        DEFAULT_CROSS_SECTIONS = Photon::get_cross_sections(energy);
     }
 }
 #[inline(always)]
@@ -210,7 +228,7 @@ impl Photon {
     where
         F: RandGen,
     {
-        let cross_sections = Photon::get_cross_sections(self.energy);
+        let cross_sections = Photon::get_cross_sections_cached(self.energy);
         let cross_section_sum_macroscopic = cross_sections.3 * get_detector_density();
         let free_path = -(1.0 / cross_section_sum_macroscopic) * F::rand().ln();
 
@@ -276,6 +294,25 @@ impl Photon {
             PAIR_PRODUCTION[idx_low] * lcoeff + PAIR_PRODUCTION[idx_high] * hcoeff,
             SUM_OF_CROSS_SECTIONS[idx_low] * lcoeff + SUM_OF_CROSS_SECTIONS[idx_high] * hcoeff,
         )
+    }
+
+    /// Returns all of the cross sections corresponding to the given energy, but this function caches these values
+    /// for the default energy value, unlike _get_cross_sections_
+    /// The energy must be given in keV, and the tuple conatins the following values in this order:
+    /// (cross section of Compton scattering, cross section for fotoeffect, cross section for pair production, sum of all cross sections)
+    ///
+    /// The cross sections are given in cm²/g
+    fn get_cross_sections_cached(energy: F) -> (F, F, F, F) {
+        unsafe {
+            if energy == DEFAULT_ENERGY {
+                return DEFAULT_CROSS_SECTIONS;
+            }
+            // Pair producted photon energy
+            if energy == 511.0 {
+                return (0.07292810000000001, 0.0161745, 0.0, 0.0891026);
+            }
+        }
+        Self::get_cross_sections(energy)
     }
 
     fn move_by(&mut self, dist: F) {

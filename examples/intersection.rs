@@ -1,9 +1,10 @@
 use gnuplot::AxesCommon;
-use particle_transport::photon::{set_detector, Photon, PhotonLocation, F};
+use particle_transport::photon::{set_default_energy, set_detector, Photon, PhotonLocation, F};
 use particle_transport::vec3::Vector;
 
 fn main() {
     set_detector(1.0, 1.0, 5.0);
+    set_default_energy(700.0);
     let photon_emitter = Vector::<F>::new(-2.0, -2.0, -2.0);
     let mut ps = Vec::<Vector<F>>::new();
     for _ in 0..100000 {

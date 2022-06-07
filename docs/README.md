@@ -1,3 +1,3 @@
-This folder contains the files required for the web app.
+## Monte Carlo photon transport simulation
 
-The reason the folder is called "docs" is because that is the name that GitHub requires in order to host a web page from the `master` branch of a repository. You can test the `eframe_template` at <https://emilk.github.io/eframe_template/>.
+Web version available here: https://akosseres.github.io/particle_transport/

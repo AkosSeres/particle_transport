@@ -470,8 +470,7 @@ impl eframe::App for MyApp {
                             self.arguments.ry,
                             self.arguments.rz,
                         ),
-                        dir: Vector::<F>::random_isotropic_normed(),
-                        //dir: photon_emit.gen_photon_dir(),
+                        dir: photon_emit.gen_photon_dir(),
                     };
                     let mut energy_hit_size = random_photon.simulate();
                     if energy_hit_size <= 0.0 {

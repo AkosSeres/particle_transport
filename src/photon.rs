@@ -370,7 +370,9 @@ impl Photon {
 
                     (
                         false,
-                        self.energy - 1022.0 + photon1.simulate() + photon2.simulate(),
+                        self.energy - 1022.0
+                            + photon1.simulate().energy_transfered
+                            + photon2.simulate().energy_transfered,
                     )
                 }
             }
@@ -380,25 +382,38 @@ impl Photon {
     }
 
     /// Simulates the path of the photon, and we return how much energy it gives off to the detector
-    pub fn simulate(&mut self) -> f64 {
+    pub fn simulate(&mut self) -> SimulationResults {
         let mut location = self.intersect_detector();
+        let start_energy = self.energy;
         let mut energy_transfered = 0.0;
+
+        let mut results = SimulationResults {
+            energy_transfered: 0.0,
+            hit_detector: false,
+        };
+
         while location != PhotonLocation::OutsideMisses {
+            results.hit_detector = true;
             match location {
-                PhotonLocation::OutsideMisses => return energy_transfered,
                 PhotonLocation::OutsideInto(dist) => self.move_by(dist),
                 PhotonLocation::Inside(dist) => {
                     let move_result = self.move_inside(dist);
-                    energy_transfered += move_result.1;
+                    results.energy_transfered += move_result.1;
                     if !move_result.0 {
-                        return energy_transfered;
+                        return results;
                     }
                 }
+                _ => return results,
             }
             location = self.intersect_detector();
         }
-        0.0
+        results
     }
+}
+
+pub struct SimulationResults {
+    pub energy_transfered: f64,
+    pub hit_detector: bool,
 }
 
 const CROSS_SECTION_DATA_POINTS: usize = 58;

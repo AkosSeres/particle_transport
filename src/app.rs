@@ -4,6 +4,7 @@ use crate::{
     rand_gen::RandGen,
     vec3::Vector,
 };
+use atomic_float::AtomicF64;
 use eframe::{
     egui::{self, RichText},
     epaint::Color32,
@@ -56,10 +57,12 @@ impl Default for SimulationArgs {
 
 #[derive(Default)]
 struct SimulationStatistics {
-    intrinsic_efficiency_sum: f64,
-    total_efficiency_sum: f64,
-    total_photon_count: usize,
-    photon_count_with_detector: usize,
+    intrinsic_efficiency_sum: AtomicF64,
+    intrinsic_efficiency_square_sum: AtomicF64,
+    total_efficiency_sum: AtomicF64,
+    total_efficiency_square_sum: AtomicF64,
+    total_photon_count: AtomicU64,
+    photon_count_with_detector: AtomicU64,
 }
 
 pub struct MyApp {
@@ -155,6 +158,7 @@ impl MyApp {
 
     fn reset_spectrum(&mut self) {
         self.channels.iter().for_each(|ch| ch.store(0, SeqCst));
+        self.simulation_statistics = Arc::new(SimulationStatistics::default());
     }
 }
 
@@ -167,27 +171,71 @@ fn run_simulation_cycles(
     channels: &Arc<Vec<AtomicU64>>,
     simulation_statistics: &Arc<SimulationStatistics>,
 ) {
-    for _ in 0..100000 {
+    let cycle_count = 100_000;
+    let mut photon_count_with_detector = 0;
+    let mut total_efficiency_sum = 0.0;
+    let mut total_efficiency_square_sum = 0.0;
+    let mut intrinsic_efficiency_sum = 0.0;
+    let mut intrinsic_efficiency_square_sum = 0.0;
+
+    for _ in 0..cycle_count {
         let mut random_photon = Photon {
             energy,
             pos: pos_vector,
             dir: photon_emit.gen_photon_dir(),
         };
-        let mut energy_hit_size = random_photon.simulate();
-        if energy_hit_size <= 0.0 {
+        let sim_results = random_photon.simulate();
+
+        // Calculate efficiencies
+        let current_total_efficiency =
+            sim_results.energy_transfered / energy * photon_emit.get_solid_angle();
+        total_efficiency_sum += current_total_efficiency;
+        total_efficiency_square_sum += current_total_efficiency * current_total_efficiency;
+        if sim_results.hit_detector {
+            photon_count_with_detector += 1;
+            let current_intrinsic_efficiency = sim_results.energy_transfered / energy;
+            intrinsic_efficiency_sum += current_intrinsic_efficiency;
+            intrinsic_efficiency_square_sum +=
+                current_intrinsic_efficiency * current_intrinsic_efficiency;
+        }
+
+        let mut energy_hit_size = sim_results.energy_transfered;
+        if energy_hit_size <= 0.0 || !sim_results.hit_detector {
             continue;
         }
+
         energy_hit_size += f64::rand_normal_sum12() * deviation;
         if energy_hit_size <= 0.0 {
             continue;
         }
+
         let channel_width = max_energy / (channels.len() as f64);
         let idx = (energy_hit_size / channel_width).floor() as usize;
-        if idx >= channels.len() || idx == 0 {
+        if idx >= channels.len() {
             continue;
         }
         channels[idx].fetch_add(1, Relaxed);
     }
+
+    simulation_statistics
+        .total_photon_count
+        .fetch_add(cycle_count, Relaxed);
+    simulation_statistics
+        .photon_count_with_detector
+        .fetch_add(photon_count_with_detector, Relaxed);
+    simulation_statistics
+        .total_efficiency_sum
+        .fetch_add(total_efficiency_sum / 4.0 / std::f64::consts::PI, Relaxed);
+    simulation_statistics.total_efficiency_square_sum.fetch_add(
+        total_efficiency_square_sum / 8.0 / std::f64::consts::PI / std::f64::consts::PI,
+        Relaxed,
+    );
+    simulation_statistics
+        .intrinsic_efficiency_sum
+        .fetch_add(intrinsic_efficiency_sum, Relaxed);
+    simulation_statistics
+        .intrinsic_efficiency_square_sum
+        .fetch_add(intrinsic_efficiency_square_sum, Relaxed);
 }
 
 impl eframe::App for MyApp {
@@ -286,7 +334,6 @@ impl eframe::App for MyApp {
                         ui.add_space(5.0);
                         ui.add(egui::Spinner::default());
                     }
-                    ui.label(format!("{}", hits));
                 });
 
                 if self.start_instant.is_some() {
@@ -313,11 +360,126 @@ impl eframe::App for MyApp {
                         format!("{:3.2}/s", rate.round())
                     };
                     egui::Grid::new("simulation_info").show(ui, |ui| {
+                        let total_photon_count =
+                            self.simulation_statistics.total_photon_count.load(Relaxed);
+                        let photon_count_with_detector = self
+                            .simulation_statistics
+                            .photon_count_with_detector
+                            .load(Relaxed);
+                        let total_efficiency_sum = self
+                            .simulation_statistics
+                            .total_efficiency_sum
+                            .load(Relaxed);
+                        let total_efficiency_square_sum = self
+                            .simulation_statistics
+                            .total_efficiency_square_sum
+                            .load(Relaxed);
+                        let total_efficiency = total_efficiency_sum / total_photon_count as f64;
+                        let total_efficiency_deviation = (total_efficiency_square_sum
+                            / total_photon_count as f64
+                            - total_efficiency * total_efficiency)
+                            .sqrt();
+                        let intrinsic_efficiency_sum = self
+                            .simulation_statistics
+                            .intrinsic_efficiency_sum
+                            .load(Relaxed);
+                        let intrinsic_efficiency_square_sum = self
+                            .simulation_statistics
+                            .intrinsic_efficiency_square_sum
+                            .load(Relaxed);
+                        let intrinsic_efficiency =
+                            intrinsic_efficiency_sum / photon_count_with_detector as f64;
+                        let intrinsic_efficiency_deviation = (intrinsic_efficiency_square_sum
+                            / photon_count_with_detector as f64
+                            - intrinsic_efficiency * intrinsic_efficiency)
+                            .sqrt();
+
                         ui.add(egui::widgets::Label::new(
-                            RichText::new(format!("Hitrate: {}", rate_text))
+                            RichText::new("").strong().size(18.0),
+                        ));
+                        ui.end_row();
+
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new("All photons emitted:").strong().size(18.0),
+                        ));
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new(total_photon_count.to_string())
                                 .strong()
                                 .size(18.0),
                         ));
+                        ui.end_row();
+
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new("Photons into detector:").strong().size(18.0),
+                        ));
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new(photon_count_with_detector.to_string())
+                                .strong()
+                                .size(18.0),
+                        ));
+                        ui.end_row();
+
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new("Hits:").strong().size(18.0),
+                        ));
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new(hits.to_string()).strong().size(18.0),
+                        ));
+                        ui.end_row();
+
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new("Hitrate:").strong().size(18.0),
+                        ));
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new(rate_text).strong().size(18.0),
+                        ));
+                        ui.end_row();
+
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new("").strong().size(18.0),
+                        ));
+                        ui.end_row();
+
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new("Total efficiency:").strong().size(18.0),
+                        ));
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new(format!("{:.5}%", total_efficiency * 100.0))
+                                .strong()
+                                .size(18.0),
+                        ));
+                        ui.end_row();
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new("\tdeviation").size(18.0),
+                        ));
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new(format!("{:.5}%", total_efficiency_deviation * 100.0))
+                                .strong()
+                                .size(18.0),
+                        ));
+                        ui.end_row();
+
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new("Intrinsic efficiency:").strong().size(18.0),
+                        ));
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new(format!("{:.5}%", intrinsic_efficiency * 100.0))
+                                .strong()
+                                .size(18.0),
+                        ));
+                        ui.end_row();
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new("\tdeviation").size(18.0),
+                        ));
+                        ui.add(egui::widgets::Label::new(
+                            RichText::new(format!(
+                                "{:.5}%",
+                                intrinsic_efficiency_deviation * 100.0
+                            ))
+                            .strong()
+                            .size(18.0),
+                        ));
+                        ui.end_row();
                     });
                 }
             });

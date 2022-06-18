@@ -1,5 +1,5 @@
 use crate::{
-    photon::{set_default_energy, set_detector, Photon, F},
+    photon::{set_default_energy, set_detector, Photon},
     photon_emitter::PhotonEmitter,
     rand_gen::RandGen,
     vec3::Vector,
@@ -20,7 +20,7 @@ use std::thread;
 
 /// Simulates the transport of the photons of a monoenergetic gamma-source inside a scintillation detector.
 #[derive(Debug)]
-pub struct MyArgs {
+pub struct SimulationArgs {
     /// Radius of the detector in cm
     pub radius: f64,
     /// Height of the detector in cm
@@ -39,7 +39,7 @@ pub struct MyArgs {
     pub rz: f64,
 }
 
-impl Default for MyArgs {
+impl Default for SimulationArgs {
     fn default() -> Self {
         Self {
             radius: 2.5,
@@ -54,8 +54,16 @@ impl Default for MyArgs {
     }
 }
 
+#[derive(Default)]
+struct SimulationStatistics {
+    intrinsic_efficiency_sum: f64,
+    total_efficiency_sum: f64,
+    total_photon_count: usize,
+    photon_count_with_detector: usize,
+}
+
 pub struct MyApp {
-    pub arguments: MyArgs,
+    pub arguments: SimulationArgs,
     pub simulation_running: Arc<AtomicBool>,
     /// The number of channels of the spectrometer
     channel_number: usize,
@@ -63,6 +71,7 @@ pub struct MyApp {
     start_instant: Option<instant::Instant>,
     end_instant: Option<instant::Instant>,
     logscale: bool,
+    simulation_statistics: Arc<SimulationStatistics>,
 }
 
 impl MyApp {
@@ -75,11 +84,11 @@ impl MyApp {
         set_default_energy(self.arguments.energy);
     }
 
-    fn get_max_energy(&self) -> F {
+    fn get_max_energy(&self) -> f64 {
         self.arguments.energy + self.arguments.fwhm * 3.0
     }
 
-    fn get_standard_deviation_from_fwhm(&self) -> F {
+    fn get_standard_deviation_from_fwhm(&self) -> f64 {
         self.arguments.fwhm / 2.35482004503
     }
 
@@ -117,7 +126,8 @@ impl MyApp {
                 ry,
                 rz,
             );
-            let pos_vector = Vector::<F>::new(rx, ry, rz);
+            let pos_vector = Vector::<f64>::new(rx, ry, rz);
+            let simulation_statistics = self.simulation_statistics.clone();
             thread::spawn(move || loop {
                 run_simulation_cycles(
                     energy,
@@ -126,6 +136,7 @@ impl MyApp {
                     deviation,
                     max_energy,
                     &channels,
+                    &simulation_statistics,
                 );
 
                 if !simulation_running.load(Relaxed) {
@@ -154,6 +165,7 @@ fn run_simulation_cycles(
     deviation: f64,
     max_energy: f64,
     channels: &Arc<Vec<AtomicU64>>,
+    simulation_statistics: &Arc<SimulationStatistics>,
 ) {
     for _ in 0..100000 {
         let mut random_photon = Photon {
@@ -165,11 +177,11 @@ fn run_simulation_cycles(
         if energy_hit_size <= 0.0 {
             continue;
         }
-        energy_hit_size += F::rand_normal_sum12() * deviation;
+        energy_hit_size += f64::rand_normal_sum12() * deviation;
         if energy_hit_size <= 0.0 {
             continue;
         }
-        let channel_width = max_energy / (channels.len() as F);
+        let channel_width = max_energy / (channels.len() as f64);
         let idx = (energy_hit_size / channel_width).floor() as usize;
         if idx >= channels.len() || idx == 0 {
             continue;
@@ -196,13 +208,13 @@ impl eframe::App for MyApp {
                     ui.label("Radius: ");
                     ui.add_enabled(
                         !simulation_running,
-                        egui::Slider::new(&mut self.arguments.radius, 0.5..=12.0).text("cm"),
+                        egui::Slider::new(&mut self.arguments.radius, 0.5_f64..=12.0).text("cm"),
                     );
                     ui.end_row();
                     ui.label("Height: ");
                     ui.add_enabled(
                         !simulation_running,
-                        egui::Slider::new(&mut self.arguments.height, 0.5..=12.0).text("cm"),
+                        egui::Slider::new(&mut self.arguments.height, 0.5_f64..=12.0).text("cm"),
                     );
                     ui.end_row();
                 });
@@ -364,7 +376,7 @@ impl eframe::App for MyApp {
             let max_energy = self.get_max_energy();
             let deviation = self.get_standard_deviation_from_fwhm();
             let pos_vector =
-                Vector::<F>::new(self.arguments.rx, self.arguments.ry, self.arguments.rz);
+                Vector::<f64>::new(self.arguments.rx, self.arguments.ry, self.arguments.rz);
             loop {
                 run_simulation_cycles(
                     self.arguments.energy,
@@ -373,6 +385,7 @@ impl eframe::App for MyApp {
                     deviation,
                     max_energy,
                     &self.channels,
+                    &self.simulation_statistics,
                 );
                 let end_time = instant::Instant::now();
                 if (end_time - start_time).as_micros() > 30_000 {
@@ -387,7 +400,7 @@ impl Default for MyApp {
     fn default() -> Self {
         let default_channel_number = 1024;
         Self {
-            arguments: MyArgs::default(),
+            arguments: SimulationArgs::default(),
             simulation_running: Arc::new(AtomicBool::new(false)),
             channel_number: default_channel_number,
             channels: Arc::new(
@@ -398,6 +411,7 @@ impl Default for MyApp {
             start_instant: None,
             end_instant: None,
             logscale: false,
+            simulation_statistics: Arc::new(SimulationStatistics::default()),
         }
     }
 }

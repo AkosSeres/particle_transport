@@ -1,28 +1,25 @@
 use crate::{rand_gen::RandGen, vec3::Vector};
 
-/// The float type to use in calculations
-pub type F = f64;
-
 /// Radius of the detector
-static mut DET_R: F = 2.5;
-static mut DET_RSQ: F = 6.25;
+static mut DET_R: f64 = 2.5;
+static mut DET_RSQ: f64 = 6.25;
 /// Height of the detector
-static mut DET_HEIGHT: F = 3.0;
-static mut DET_ZBOTTOM: F = -1.5;
-static mut DET_ZTOP: F = 1.5;
+static mut DET_HEIGHT: f64 = 3.0;
+static mut DET_ZBOTTOM: f64 = -1.5;
+static mut DET_ZTOP: f64 = 1.5;
 /// Density of the detector material, in g/cm³
-static mut DET_DENSITY: F = 3.67;
+static mut DET_DENSITY: f64 = 3.67;
 /// Default photon energy
-static mut DEFAULT_ENERGY: F = ENERGIES[0];
+static mut DEFAULT_ENERGY: f64 = ENERGIES[0];
 /// Default cross sections corresponding to the default [DEFAULT_ENERGY]
-static mut DEFAULT_CROSS_SECTIONS: (F, F, F, F) = (
+static mut DEFAULT_CROSS_SECTIONS: (f64, f64, f64, f64) = (
     COMPTON[0],
     FOTOEFFECT[0],
     PAIR_PRODUCTION[0],
     SUM_OF_CROSS_SECTIONS[0],
 );
 /// Sets the properties of the detector
-pub fn set_detector(r: F, height: F, density: F) {
+pub fn set_detector(r: f64, height: f64, density: f64) {
     unsafe {
         DET_R = r;
         DET_RSQ = r * r;
@@ -32,26 +29,26 @@ pub fn set_detector(r: F, height: F, density: F) {
         DET_DENSITY = density;
     }
 }
-pub fn set_default_energy(energy: F) {
+pub fn set_default_energy(energy: f64) {
     unsafe {
         DEFAULT_ENERGY = energy;
         DEFAULT_CROSS_SECTIONS = Photon::get_cross_sections(energy);
     }
 }
 #[inline(always)]
-fn get_detector_rsq() -> F {
+fn get_detector_rsq() -> f64 {
     unsafe { DET_RSQ }
 }
 #[inline(always)]
-fn get_detector_zbottom() -> F {
+fn get_detector_zbottom() -> f64 {
     unsafe { DET_ZBOTTOM }
 }
 #[inline(always)]
-fn get_detector_ztop() -> F {
+fn get_detector_ztop() -> f64 {
     unsafe { DET_ZTOP }
 }
 #[inline(always)]
-fn get_detector_density() -> F {
+fn get_detector_density() -> f64 {
     unsafe { DET_DENSITY }
 }
 
@@ -62,7 +59,7 @@ pub enum PhotonStep {
     /// Enters the detector
     Enter,
     /// The photon transfers energy inside the detector
-    TransferEnergy(F),
+    TransferEnergy(f64),
     /// Exits the detector
     Exit,
 }
@@ -76,25 +73,25 @@ enum InteractionType {
 #[derive(PartialEq, Debug)]
 pub enum PhotonLocation {
     OutsideMisses,
-    OutsideInto(F),
-    Inside(F),
+    OutsideInto(f64),
+    Inside(f64),
 }
 
 #[derive(Debug, Copy, Clone)]
 pub struct Photon {
     /// The current energy of the photon in keV
-    pub energy: F,
+    pub energy: f64,
     /// The current position of the photon
-    pub pos: Vector<F>,
+    pub pos: Vector<f64>,
     /// The movement direction of the photon, expressed as a unit vector
-    pub dir: Vector<F>,
+    pub dir: Vector<f64>,
 }
 
 impl Photon {
     /// Intersects the path of the photon with an x-y plane and if they intersect, it returns the distance.
     /// # Arguments
     /// * `plane_z` - The z-level of the plane
-    fn intersect_plane(&self, plane_z: F) -> Option<F> {
+    fn intersect_plane(&self, plane_z: f64) -> Option<f64> {
         if self.pos.z == plane_z {
             return Some(0.0);
         }
@@ -105,7 +102,7 @@ impl Photon {
     }
 
     /// Intersects the path of the photon with the bottom base of the detector and if they intersect, it returns the distance.
-    pub fn intersect_bottom_base(&self) -> Option<F> {
+    pub fn intersect_bottom_base(&self) -> Option<f64> {
         if self.pos.z == get_detector_zbottom() {
             return Some(0.0);
         }
@@ -120,7 +117,7 @@ impl Photon {
         Some(dist)
     }
     /// Intersects the path of the photon with the top base of the detector and if they intersect, it returns the distance.
-    pub fn intersect_top_base(&self) -> Option<F> {
+    pub fn intersect_top_base(&self) -> Option<f64> {
         if self.pos.z == get_detector_ztop() {
             return Some(0.0);
         }
@@ -136,7 +133,7 @@ impl Photon {
     }
 
     /// Intersects the path of the photon with the infinitely extended cylinder of the detector and if they intersect, it returns the distances (both the entering distance and the exit distance as well).
-    pub fn intersect_infinite_cylinder(&self) -> Option<(F, F)> {
+    pub fn intersect_infinite_cylinder(&self) -> Option<(f64, f64)> {
         let a = self.dir.x * self.dir.x + self.dir.y * self.dir.y;
         let b = 2.0 * (self.pos.x * self.dir.x + self.pos.y * self.dir.y);
         let c = self.pos.x * self.pos.x + self.pos.y * self.pos.y - get_detector_rsq();
@@ -149,7 +146,7 @@ impl Photon {
     }
 
     /// Intersects the path of the photon with the cylinder of the detector and if they intersect, it returns the frontal distance
-    pub fn intersect_cylinder(&self) -> Option<F> {
+    pub fn intersect_cylinder(&self) -> Option<f64> {
         let a = self.dir.x * self.dir.x + self.dir.y * self.dir.y;
         let b = 2.0 * (self.pos.x * self.dir.x + self.pos.y * self.dir.y);
         let c = self.pos.x * self.pos.x + self.pos.y * self.pos.y - get_detector_rsq();
@@ -184,8 +181,8 @@ impl Photon {
         let is_inside = self.pos.x * self.pos.x + self.pos.y * self.pos.y < get_detector_rsq()
             && self.pos.z > get_detector_zbottom()
             && self.pos.z < get_detector_ztop();
-        let mut forward_dist: Option<F> = None;
-        let mut process_any_dist = |d_opt: Option<F>| match d_opt {
+        let mut forward_dist: Option<f64> = None;
+        let mut process_any_dist = |d_opt: Option<f64>| match d_opt {
             None => {}
             Some(new_d) => {
                 if new_d > 0.0 {
@@ -221,15 +218,15 @@ impl Photon {
         return PhotonLocation::OutsideMisses;
     }
 
-    fn sample_free_path_and_interaction_type(&self) -> (F, InteractionType)
+    fn sample_free_path_and_interaction_type(&self) -> (f64, InteractionType)
     where
-        F: RandGen,
+        f64: RandGen,
     {
         let cross_sections = Photon::get_cross_sections_cached(self.energy);
         let cross_section_sum_macroscopic = cross_sections.3 * get_detector_density();
-        let free_path = -(1.0 / cross_section_sum_macroscopic) * F::rand().ln();
+        let free_path = -(1.0 / cross_section_sum_macroscopic) * f64::rand().ln();
 
-        let interaction_coeff = cross_sections.3 * F::rand();
+        let interaction_coeff = cross_sections.3 * f64::rand();
         let interaction_type = if interaction_coeff <= cross_sections.0 {
             InteractionType::ComptonScatter
         } else if interaction_coeff <= (cross_sections.1 + cross_sections.0) {
@@ -245,7 +242,7 @@ impl Photon {
     /// (cross section of Compton scattering, cross section for fotoeffect, cross section for pair production, sum of all cross sections)
     ///
     /// The cross sections are given in cm²/g
-    fn get_cross_sections(energy: F) -> (F, F, F, F) {
+    fn get_cross_sections(energy: f64) -> (f64, f64, f64, f64) {
         let mut idx_low: usize = 0;
         let mut idx_high: usize = CROSS_SECTION_DATA_POINTS - 1;
         if energy <= ENERGIES[0] {
@@ -299,7 +296,7 @@ impl Photon {
     /// (cross section of Compton scattering, cross section for fotoeffect, cross section for pair production, sum of all cross sections)
     ///
     /// The cross sections are given in cm²/g
-    fn get_cross_sections_cached(energy: F) -> (F, F, F, F) {
+    fn get_cross_sections_cached(energy: f64) -> (f64, f64, f64, f64) {
         unsafe {
             if energy == DEFAULT_ENERGY {
                 return DEFAULT_CROSS_SECTIONS;
@@ -312,11 +309,11 @@ impl Photon {
         Self::get_cross_sections(energy)
     }
 
-    fn move_by(&mut self, dist: F) {
+    fn move_by(&mut self, dist: f64) {
         self.pos = self.pos + self.dir * dist;
     }
 
-    fn move_inside(&mut self, inside_wall_dist: F) -> (bool, F) {
+    fn move_inside(&mut self, inside_wall_dist: f64) -> (bool, f64) {
         let next_move = self.sample_free_path_and_interaction_type();
         let interaction_type = next_move.1;
         let free_path = next_move.0;
@@ -328,7 +325,7 @@ impl Photon {
                     let lambda = 511.0 / self.energy;
                     let R;
                     loop {
-                        let (r1, r2, r3) = (F::rand(), F::rand(), F::rand());
+                        let (r1, r2, r3) = (f64::rand(), f64::rand(), f64::rand());
                         if r1 <= (1.0 + 2.0 / lambda) / (9.0 + 2.0 / lambda) {
                             let R_ = 1.0 + 2.0 * r2 / lambda;
                             if r3 <= 4.0 * (1.0 / R_ + 1.0 / (R_ * R_)) {
@@ -363,7 +360,7 @@ impl Photon {
                     let mut photon1 = Photon {
                         energy: 511.0,
                         pos: self.pos,
-                        dir: Vector::<F>::random_isotropic_normed(),
+                        dir: Vector::<f64>::random_isotropic_normed(),
                     };
                     let mut photon2 = Photon {
                         energy: 511.0,
@@ -383,7 +380,7 @@ impl Photon {
     }
 
     /// Simulates the path of the photon, and we return how much energy it gives off to the detector
-    pub fn simulate(&mut self) -> F {
+    pub fn simulate(&mut self) -> f64 {
         let mut location = self.intersect_detector();
         let mut energy_transfered = 0.0;
         while location != PhotonLocation::OutsideMisses {
@@ -406,14 +403,14 @@ impl Photon {
 
 const CROSS_SECTION_DATA_POINTS: usize = 58;
 // Energy dependent cross sections
-const ENERGIES: [F; CROSS_SECTION_DATA_POINTS] = [
+const ENERGIES: [f64; CROSS_SECTION_DATA_POINTS] = [
     1.0, 1.035, 1.072, 1.072, 1.5, 2.0, 3.0, 4.0, 4.557, 4.557, 4.702, 4.852, 4.852, 5.0, 5.188,
     5.188, 6.0, 8.0, 10.0, 15.0, 20.0, 30.0, 33.17, 33.17, 40.0, 50.0, 60.0, 80.0, 100.0, 150.0,
     200.0, 300.0, 400.0, 500.0, 600.0, 800.0, 1000.0, 1022.0, 1250.0, 1500.0, 2000.0, 2044.0,
     3000.0, 4000.0, 5000.0, 6000.0, 7000.0, 8000.0, 9000.0, 10000.0, 11000.0, 12000.0, 13000.0,
     14000.0, 15000.0, 16000.0, 18000.0, 20000.0,
 ];
-const COMPTON: [F; CROSS_SECTION_DATA_POINTS] = [
+const COMPTON: [f64; CROSS_SECTION_DATA_POINTS] = [
     0.005916, 0.006244, 0.006586, 0.006587, 0.01065, 0.01541, 0.02459, 0.03292, 0.03712, 0.03712,
     0.03816, 0.03923, 0.03923, 0.04026, 0.04155, 0.04155, 0.04679, 0.05799, 0.06731, 0.0841,
     0.09463, 0.1067, 0.109, 0.109, 0.1127, 0.1157, 0.1169, 0.1165, 0.1144, 0.1071, 0.1, 0.0886,
@@ -421,7 +418,7 @@ const COMPTON: [F; CROSS_SECTION_DATA_POINTS] = [
     0.02963, 0.02472, 0.02135, 0.01887, 0.01697, 0.01544, 0.0142, 0.01315, 0.01227, 0.0115,
     0.01084, 0.01025, 0.009737, 0.009271, 0.008471, 0.007811,
 ];
-const FOTOEFFECT: [F; CROSS_SECTION_DATA_POINTS] = [
+const FOTOEFFECT: [f64; CROSS_SECTION_DATA_POINTS] = [
     7794.0, 7245.0, 6736.0, 7924.0, 3801.0, 1917.0, 700.3, 335.1, 238.7, 658.5, 616.6, 577.4,
     771.9, 727.7, 661.1, 760.4, 529.7, 248.9, 137.5, 45.7, 20.62, 6.607, 4.972, 29.76, 18.24,
     10.06, 6.111, 2.746, 1.462, 0.4592, 0.2019, 0.06481, 0.02987, 0.01684, 0.01079, 0.005588,
@@ -429,14 +426,14 @@ const FOTOEFFECT: [F; CROSS_SECTION_DATA_POINTS] = [
     0.0002, 0.0001647, 0.0001398, 0.0001212, 0.0001069, 0.00009565, 0.00008648, 0.00007888,
     0.00007249, 0.00006706, 0.0000624, 0.00005472, 0.00004873,
 ];
-const PAIR_PRODUCTION: [F; CROSS_SECTION_DATA_POINTS] = [
+const PAIR_PRODUCTION: [f64; CROSS_SECTION_DATA_POINTS] = [
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
     0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
     0.0001634, 0.0007594, 0.002575, 0.002751, 0.00652836, 0.01005228, 0.01311417, 0.0157591,
     0.0181239, 0.0202573, 0.0221889, 0.0239583, 0.0255956, 0.0271008, 0.028514, 0.0298055,
     0.0310054, 0.0321239, 0.0341662, 0.0359942,
 ];
-const SUM_OF_CROSS_SECTIONS: [F; CROSS_SECTION_DATA_POINTS] = [
+const SUM_OF_CROSS_SECTIONS: [f64; CROSS_SECTION_DATA_POINTS] = [
     7794.005916,
     7245.006244,
     6736.006586,

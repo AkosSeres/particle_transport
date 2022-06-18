@@ -1,17 +1,17 @@
 use gnuplot::AxesCommon;
-use particle_transport::photon::{set_default_energy, set_detector, Photon, PhotonLocation, F};
+use particle_transport::photon::{set_default_energy, set_detector, Photon, PhotonLocation};
 use particle_transport::vec3::Vector;
 
 fn main() {
     set_detector(1.0, 1.0, 5.0);
     set_default_energy(700.0);
-    let photon_emitter = Vector::<F>::new(-2.0, -2.0, -2.0);
-    let mut ps = Vec::<Vector<F>>::new();
+    let photon_emitter = Vector::<f64>::new(-2.0, -2.0, -2.0);
+    let mut ps = Vec::<Vector<f64>>::new();
     for _ in 0..100000 {
         let photon = Photon {
             energy: 700.0,
             pos: photon_emitter,
-            dir: Vector::<F>::random_isotropic_normed(),
+            dir: Vector::<f64>::random_isotropic_normed(),
         };
         let location = photon.intersect_detector();
         match location {
@@ -25,9 +25,9 @@ fn main() {
     }
 
     // generate (x,y,z) matrices
-    let x: Vec<F> = ps.iter().map(|p| p.x).collect();
-    let y: Vec<F> = ps.iter().map(|p| p.y).collect();
-    let z: Vec<F> = ps.iter().map(|p| p.z).collect();
+    let x: Vec<f64> = ps.iter().map(|p| p.x).collect();
+    let y: Vec<f64> = ps.iter().map(|p| p.y).collect();
+    let z: Vec<f64> = ps.iter().map(|p| p.z).collect();
 
     use gnuplot::{Caption, Color, Figure};
 
@@ -39,5 +39,5 @@ fn main() {
         .set_z_range(gnuplot::Fix(-5.0), gnuplot::Fix(5.0))
         .set_y_range(gnuplot::Fix(-5.0), gnuplot::Fix(5.0))
         .set_x_range(gnuplot::Fix(-5.0), gnuplot::Fix(5.0));
-    fg.show();
+    fg.show().expect("Failed to display the plot.");
 }

@@ -33,9 +33,5 @@ nanorand = { version = "0.7.0", features = [ "wyrand", "getrandom" ] }
 gnuplot = "0.0.37"
 criterion = "0.3"
 
-[[bench]]
-name = "simulation"
-harness = false
-
 [profile.release]
 codegen-units = 1

@@ -80,7 +80,7 @@ impl MyApp {
     }
 
     fn get_standard_deviation_from_fwhm(&self) -> F {
-        self.arguments.fwhm / 2.3548
+        self.arguments.fwhm / 2.35482004503
     }
 
     fn start_stop_simulation(&mut self) {

@@ -42,16 +42,6 @@ pub struct MyArgs {
 impl Default for MyArgs {
     fn default() -> Self {
         Self {
-            radius: 2.0,
-            height: 4.0,
-            energy: 4000.0,
-            density: 3.67,
-            fwhm: 6.0,
-            rx: 3.0,
-            ry: 3.0,
-            rz: 3.0,
-        }
-        /*Self {
             radius: 2.5,
             height: 3.0,
             energy: 661.7,
@@ -60,7 +50,7 @@ impl Default for MyArgs {
             rx: 3.0,
             ry: -3.0,
             rz: 2.0,
-        }*/
+        }
     }
 }
 
@@ -85,8 +75,12 @@ impl MyApp {
         set_default_energy(self.arguments.energy);
     }
 
-    fn get_max_energy(&self) -> f64 {
-        self.arguments.energy + self.arguments.fwhm * 10.0
+    fn get_max_energy(&self) -> F {
+        self.arguments.energy + self.arguments.fwhm * 3.0
+    }
+
+    fn get_standard_deviation_from_fwhm(&self) -> F {
+        self.arguments.fwhm / 2.3548
     }
 
     fn start_stop_simulation(&mut self) {
@@ -115,7 +109,7 @@ impl MyApp {
             let simulation_running = self.simulation_running.clone();
             let energy = self.arguments.energy;
             let (rx, ry, rz) = (self.arguments.rx, self.arguments.ry, self.arguments.rz);
-            let deviation = self.arguments.fwhm / 2.3548;
+            let deviation = self.get_standard_deviation_from_fwhm();
             let photon_emit = PhotonEmitter::from_params(
                 self.arguments.radius,
                 self.arguments.height,
@@ -125,27 +119,14 @@ impl MyApp {
             );
             let pos_vector = Vector::<F>::new(rx, ry, rz);
             thread::spawn(move || loop {
-                for _ in 0..100000 {
-                    let mut random_photon = Photon {
-                        energy,
-                        pos: pos_vector,
-                        dir: photon_emit.gen_photon_dir(),
-                    };
-                    let mut energy_hit_size = random_photon.simulate();
-                    if energy_hit_size <= 0.0 {
-                        continue;
-                    }
-                    energy_hit_size += F::rand_normal_sum12() * deviation;
-                    if energy_hit_size <= 0.0 {
-                        continue;
-                    }
-                    let channel_width = max_energy / (channels.len() as f64);
-                    let idx = (energy_hit_size / channel_width).floor() as usize;
-                    if idx >= channels.len() {
-                        continue;
-                    }
-                    channels[idx].fetch_add(1, Relaxed);
-                }
+                run_simulation_cycles(
+                    energy,
+                    pos_vector,
+                    &photon_emit,
+                    deviation,
+                    max_energy,
+                    &channels,
+                );
 
                 if !simulation_running.load(Relaxed) {
                     return;
@@ -163,6 +144,37 @@ impl MyApp {
 
     fn reset_spectrum(&mut self) {
         self.channels.iter().for_each(|ch| ch.store(0, SeqCst));
+    }
+}
+
+fn run_simulation_cycles(
+    energy: f64,
+    pos_vector: Vector<f64>,
+    photon_emit: &PhotonEmitter,
+    deviation: f64,
+    max_energy: f64,
+    channels: &Arc<Vec<AtomicU64>>,
+) {
+    for _ in 0..100000 {
+        let mut random_photon = Photon {
+            energy,
+            pos: pos_vector,
+            dir: photon_emit.gen_photon_dir(),
+        };
+        let mut energy_hit_size = random_photon.simulate();
+        if energy_hit_size <= 0.0 {
+            continue;
+        }
+        energy_hit_size += F::rand_normal_sum12() * deviation;
+        if energy_hit_size <= 0.0 {
+            continue;
+        }
+        let channel_width = max_energy / (channels.len() as F);
+        let idx = (energy_hit_size / channel_width).floor() as usize;
+        if idx >= channels.len() || idx == 0 {
+            continue;
+        }
+        channels[idx].fetch_add(1, Relaxed);
     }
 }
 
@@ -241,130 +253,6 @@ impl eframe::App for MyApp {
                     ui.add(egui::Checkbox::new(&mut self.logscale, ""));
                     ui.end_row();
                 });
-
-                /*egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.heading(RichText::from("Views:").size(18.0));
-                    let halfrange = self
-                        .arguments
-                        .radius
-                        .max(self.arguments.height / 2.0)
-                        .max(self.arguments.rx.abs())
-                        .max(self.arguments.ry.abs())
-                        .max(self.arguments.rz.abs());
-                    egui::CollapsingHeader::new("Top view").show(ui, |ui| {
-                        let detector_circle = (0..51).map(|i| {
-                            let x = i as f64 * 2.0 * std::f64::consts::PI / 50.0;
-                            egui::plot::Value::new(
-                                self.arguments.radius * x.cos(),
-                                self.arguments.radius * x.sin(),
-                            )
-                        });
-                        let line = egui::plot::Line::new(egui::plot::Values::from_values_iter(
-                            detector_circle,
-                        ));
-                        let point = egui::plot::Points::new(egui::plot::Values::from_values_iter(
-                            [egui::plot::Value::new(self.arguments.rx, self.arguments.ry)]
-                                .into_iter(),
-                        ))
-                        .radius(5.0);
-                        egui::plot::Plot::new("top_view_plot")
-                            .allow_zoom(true)
-                            .view_aspect(1.0)
-                            .data_aspect(1.0)
-                            .allow_boxed_zoom(false)
-                            .allow_drag(false)
-                            .allow_scroll(false)
-                            .allow_zoom(false)
-                            .center_x_axis(true)
-                            .center_y_axis(true)
-                            .include_x(halfrange)
-                            .include_y(halfrange)
-                            .show_x(false)
-                            .show_y(false)
-                            .show(ui, |plot_ui| {
-                                plot_ui.line(line);
-                                plot_ui.points(point);
-                            });
-                    });
-
-                    egui::CollapsingHeader::new("Front view").show(ui, |ui| {
-                        let r = self.arguments.radius;
-                        let h = self.arguments.height;
-                        let detector_shape = [
-                            egui::plot::Value::new(-r / 2.0, -h / 2.0),
-                            egui::plot::Value::new(-r / 2.0, h / 2.0),
-                            egui::plot::Value::new(r / 2.0, h / 2.0),
-                            egui::plot::Value::new(r / 2.0, -h / 2.0),
-                            egui::plot::Value::new(-r / 2.0, -h / 2.0),
-                        ]
-                        .into_iter();
-                        let line = egui::plot::Line::new(egui::plot::Values::from_values_iter(
-                            detector_shape,
-                        ));
-                        let point = egui::plot::Points::new(egui::plot::Values::from_values_iter(
-                            [egui::plot::Value::new(self.arguments.rx, self.arguments.rz)]
-                                .into_iter(),
-                        ))
-                        .radius(5.0);
-                        egui::plot::Plot::new("front_view_plot")
-                            .allow_zoom(true)
-                            .view_aspect(1.0)
-                            .data_aspect(1.0)
-                            .allow_boxed_zoom(false)
-                            .allow_drag(false)
-                            .allow_scroll(false)
-                            .allow_zoom(false)
-                            .center_x_axis(true)
-                            .center_y_axis(true)
-                            .include_x(halfrange)
-                            .include_y(halfrange)
-                            .show_x(false)
-                            .show_y(false)
-                            .show(ui, |plot_ui| {
-                                plot_ui.line(line);
-                                plot_ui.points(point);
-                            });
-                    });
-
-                    egui::CollapsingHeader::new("Side view").show(ui, |ui| {
-                        let r = self.arguments.radius;
-                        let h = self.arguments.height;
-                        let detector_shape = [
-                            egui::plot::Value::new(-r / 2.0, -h / 2.0),
-                            egui::plot::Value::new(-r / 2.0, h / 2.0),
-                            egui::plot::Value::new(r / 2.0, h / 2.0),
-                            egui::plot::Value::new(r / 2.0, -h / 2.0),
-                            egui::plot::Value::new(-r / 2.0, -h / 2.0),
-                        ]
-                        .into_iter();
-                        let line = egui::plot::Line::new(egui::plot::Values::from_values_iter(
-                            detector_shape,
-                        ));
-                        let point = egui::plot::Points::new(egui::plot::Values::from_values_iter(
-                            [egui::plot::Value::new(self.arguments.ry, self.arguments.rz)]
-                                .into_iter(),
-                        ))
-                        .radius(5.0);
-                        egui::plot::Plot::new("front_view_plot")
-                            .allow_zoom(true)
-                            .view_aspect(1.0)
-                            .data_aspect(1.0)
-                            .allow_boxed_zoom(false)
-                            .allow_drag(false)
-                            .allow_scroll(false)
-                            .allow_zoom(false)
-                            .center_x_axis(true)
-                            .center_y_axis(true)
-                            .include_x(halfrange)
-                            .include_y(halfrange)
-                            .show_x(false)
-                            .show_y(false)
-                            .show(ui, |plot_ui| {
-                                plot_ui.line(line);
-                                plot_ui.points(point);
-                            });
-                    });
-                });*/
 
                 let hits = self.channels.iter().map(|ch| ch.load(Relaxed)).sum::<u64>();
 
@@ -474,31 +362,18 @@ impl eframe::App for MyApp {
             );
             let start_time = instant::Instant::now();
             let max_energy = self.get_max_energy();
+            let deviation = self.get_standard_deviation_from_fwhm();
+            let pos_vector =
+                Vector::<F>::new(self.arguments.rx, self.arguments.ry, self.arguments.rz);
             loop {
-                for _ in 0..100000 {
-                    let mut random_photon = Photon {
-                        energy: self.arguments.energy,
-                        pos: Vector::<F>::new(
-                            self.arguments.rx,
-                            self.arguments.ry,
-                            self.arguments.rz,
-                        ),
-                        dir: photon_emit.gen_photon_dir(),
-                    };
-                    let mut energy_hit_size = random_photon.simulate();
-                    if energy_hit_size <= 0.0 {
-                        continue;
-                    }
-                    for _ in 0..12 {
-                        energy_hit_size += (F::rand() - 0.5) * self.arguments.fwhm;
-                    }
-                    let channel_width = max_energy / (self.channels.len() as f64);
-                    let idx = (energy_hit_size / channel_width).floor() as usize;
-                    if idx >= self.channels.len() {
-                        continue;
-                    }
-                    self.channels[idx].fetch_add(1, Relaxed);
-                }
+                run_simulation_cycles(
+                    self.arguments.energy,
+                    pos_vector,
+                    &photon_emit,
+                    deviation,
+                    max_energy,
+                    &self.channels,
+                );
                 let end_time = instant::Instant::now();
                 if (end_time - start_time).as_micros() > 30_000 {
                     break;

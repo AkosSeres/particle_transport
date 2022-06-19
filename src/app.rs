@@ -181,6 +181,9 @@ pub struct MyApp {
     logscale: bool,
     /// The statistical data of the simulation
     simulation_statistics: Arc<SimulationStatistics>,
+    /// The number of threads to use
+    #[cfg(not(target_arch = "wasm32"))]
+    thread_count: usize,
 }
 
 impl MyApp {
@@ -233,8 +236,8 @@ impl MyApp {
         self.end_instant = None;
 
         #[cfg(not(target_arch = "wasm32"))]
-        // Start as many threads as the number of logical cores
-        for _ in 0..num_cpus::get() {
+        // Start as many threads as set
+        for _ in 0..self.thread_count {
             let channels = self.channels.clone();
             let simulation_running = self.simulation_running.clone();
             let energy = self.arguments.energy;
@@ -341,6 +344,15 @@ impl MyApp {
                 egui::Slider::new(&mut self.arguments.density, 0.1..=20.0).text("g/cm³"),
             );
             ui.end_row();
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                ui.label("Number of threads: ");
+                ui.add_enabled(
+                    !simulation_running,
+                    egui::Slider::new(&mut self.thread_count, 1..=num_cpus::get() * 5),
+                );
+                ui.end_row();
+            }
             ui.label("Logarithmic scale: ");
             ui.add(egui::Checkbox::new(&mut self.logscale, ""));
             ui.end_row();
@@ -706,6 +718,8 @@ impl Default for MyApp {
             end_instant: None,
             logscale: false,
             simulation_statistics: Arc::new(SimulationStatistics::default()),
+            #[cfg(not(target_arch = "wasm32"))]
+            thread_count: num_cpus::get(),
         }
     }
 }

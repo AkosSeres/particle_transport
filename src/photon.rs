@@ -420,7 +420,7 @@ impl Photon {
         while location != PhotonLocation::OutsideMisses {
             results.hit_detector = true;
             match location {
-                PhotonLocation::OutsideInto(dist) => self.move_by(dist),
+                PhotonLocation::OutsideInto(dist) => self.move_by(dist + 0.001),
                 PhotonLocation::Inside(dist) => {
                     let move_result = self.move_inside(dist);
                     results.energy_transfered += move_result.1;

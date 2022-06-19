@@ -15,3 +15,7 @@ Cargo.lock
 
 # macOS Finder files
 .DS_Store
+
+# WASM build files, to be replaced by CI
+docs/particle_transport_bg.wasm
+docs/particle_transport.js

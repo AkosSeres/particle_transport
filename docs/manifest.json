@@ -1,6 +1,6 @@
 {
-  "name": "Egui Template PWA",
-  "short_name": "egui-template-pwa",
+  "name": "Photon Transport Simulation",
+  "short_name": "photon-transport-simulation",
   "icons": [
     {
       "src": "./icon-256.png",

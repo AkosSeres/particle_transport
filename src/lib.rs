@@ -10,7 +10,6 @@ pub use eframe;
 
 // ----------------------------------------------------------------------------
 // When compiling for web:
-
 #[cfg(target_arch = "wasm32")]
 use eframe::wasm_bindgen::{self, prelude::*};
 
@@ -27,14 +26,16 @@ pub fn start(canvas_id: &str) -> Result<(), eframe::wasm_bindgen::JsValue> {
     // Redirect tracing to console.log and friends:
     tracing_wasm::set_as_global_default();
 
+    // Create the app instance
+    let app_instance = app::MyApp::default();
+
     // Set default detector values
-    app::MyApp::default().init();
+    app_instance.init();
 
-    #[cfg(target_arch = "wasm32")]
-    {
-        use crate::rand_gen::set_rng_seed;
-        set_rng_seed(instant::now() as u64);
-    }
+    // Set the seed for random number generation
+    use crate::rand_gen::set_rng_seed;
+    set_rng_seed(instant::now() as u64);
 
-    eframe::start_web(canvas_id, Box::new(|cc| Box::new(app::MyApp::default())))
+    // Start web app
+    eframe::start_web(canvas_id, Box::new(|cc| Box::new(app_instance)))
 }

@@ -91,6 +91,7 @@ impl Photon {
     /// Intersects the path of the photon with an x-y plane and if they intersect, it returns the distance.
     /// # Arguments
     /// * `plane_z` - The z-level of the plane
+    #[allow(dead_code)]
     fn intersect_plane(&self, plane_z: f64) -> Option<f64> {
         if self.pos.z == plane_z {
             return Some(0.0);
@@ -116,6 +117,7 @@ impl Photon {
         }
         Some(dist)
     }
+
     /// Intersects the path of the photon with the top base of the detector and if they intersect, it returns the distance.
     pub fn intersect_top_base(&self) -> Option<f64> {
         if self.pos.z == get_detector_ztop() {
@@ -313,6 +315,34 @@ impl Photon {
         self.pos = self.pos + self.dir * dist;
     }
 
+    fn sample_kahn_method(&self) -> (f64, f64) {
+        let lambda = 511.0 / self.energy;
+        let rad;
+        loop {
+            let (r1, r2, r3) = (f64::rand(), f64::rand(), f64::rand());
+            if r1 <= (1.0 + 2.0 / lambda) / (9.0 + 2.0 / lambda) {
+                let r_ = 1.0 + 2.0 * r2 / lambda;
+                if r3 <= 4.0 * (1.0 / r_ + 1.0 / (r_ * r_)) {
+                    rad = r_;
+                    break;
+                } else {
+                    continue;
+                }
+            } else {
+                let r_ = (1.0 + 2.0 / lambda) / (1.0 + 2.0 * r2 / lambda);
+                if r3 <= 0.5 * ((lambda - r_ * lambda + 1.0).powi(2) + (1.0 / r_)) {
+                    rad = r_;
+                    break;
+                } else {
+                    continue;
+                }
+            }
+        }
+        let costheta = 1.0 + lambda - lambda * rad;
+        let post_energy = self.energy / rad;
+        (costheta, post_energy)
+    }
+
     fn move_inside(&mut self, inside_wall_dist: f64) -> (bool, f64) {
         let next_move = self.sample_free_path_and_interaction_type();
         let interaction_type = next_move.1;
@@ -321,35 +351,11 @@ impl Photon {
         if free_path < inside_wall_dist {
             match interaction_type {
                 InteractionType::ComptonScatter => {
-                    // Kahn method
-                    let lambda = 511.0 / self.energy;
-                    let R;
-                    loop {
-                        let (r1, r2, r3) = (f64::rand(), f64::rand(), f64::rand());
-                        if r1 <= (1.0 + 2.0 / lambda) / (9.0 + 2.0 / lambda) {
-                            let R_ = 1.0 + 2.0 * r2 / lambda;
-                            if r3 <= 4.0 * (1.0 / R_ + 1.0 / (R_ * R_)) {
-                                R = R_;
-                                break;
-                            } else {
-                                continue;
-                            }
-                        } else {
-                            let R_ = (1.0 + 2.0 / lambda) / (1.0 + 2.0 * r2 / lambda);
-                            if r3 <= 0.5 * ((lambda - R_ * lambda + 1.0).powi(2) + (1.0 / R_)) {
-                                R = R_;
-                                break;
-                            } else {
-                                continue;
-                            }
-                        }
-                    }
-                    let costheta = 1.0 + lambda - lambda * R;
-                    self.dir.rotate_random_by_angle(costheta.acos());
-                    let post_energy = self.energy / R;
-                    let energy_d = self.energy - post_energy;
-                    self.energy = post_energy;
-                    //(self.energy > 30.0, 30.0)
+                    // Use the Kahn method
+                    let (costheta, energy_after) = self.sample_kahn_method();
+                    self.dir.rotate_random_by_angle_cosine(costheta);
+                    let energy_d = self.energy - energy_after;
+                    self.energy = energy_after;
                     (true, energy_d)
                 }
                 InteractionType::Photoeffect => {
@@ -384,8 +390,6 @@ impl Photon {
     /// Simulates the path of the photon, and we return how much energy it gives off to the detector
     pub fn simulate(&mut self) -> SimulationResults {
         let mut location = self.intersect_detector();
-        let start_energy = self.energy;
-        let mut energy_transfered = 0.0;
 
         let mut results = SimulationResults {
             energy_transfered: 0.0,

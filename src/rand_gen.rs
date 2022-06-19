@@ -13,6 +13,7 @@ pub fn set_rng_seed(seed: u64) {
 
 pub trait RandGen {
     fn rand() -> Self;
+
     fn rand_normal_sum12() -> Self
     where
         Self: num::Float,
@@ -22,6 +23,7 @@ pub trait RandGen {
     {
         (0..12).map(|_| Self::rand()).sum::<Self>() - 6.0.into()
     }
+
     fn rand_normal_box_muller() -> (Self, Self)
     where
         Self: num::Float,

@@ -1,0 +1,34 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: jetli/wasm-bindgen-action@v0.1.0
+      with:
+        # Optional version of wasm-bindgen to install(eg. '0.2.68', 'latest')
+        version: 'latest'
+    - name: Install binaryen
+      run: |
+        set -e
+        curl -L https://github.com/WebAssembly/binaryen/releases/download/1.39.1/binaryen-1.39.1-x86_64-linux.tar.gz | tar xzf -
+        echo "`pwd`/binaryen-1.39.1" > $GITHUB_PATH
+    - name: Build WASM
+      run: rustup target add wasm32-unknown-unknown && ./build_web.sh
+    - name: Deploy
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs

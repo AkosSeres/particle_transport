@@ -190,8 +190,7 @@ fn run_simulation_cycles(
         let sim_results = random_photon.simulate();
 
         // Calculate efficiencies
-        let current_total_efficiency =
-            sim_results.energy_transfered / energy * photon_emit.get_solid_angle();
+        let current_total_efficiency = sim_results.energy_transfered / energy;
         total_efficiency_sum += current_total_efficiency;
         total_efficiency_square_sum += current_total_efficiency * current_total_efficiency;
         if sim_results.hit_detector {
@@ -226,11 +225,14 @@ fn run_simulation_cycles(
     simulation_statistics
         .photon_count_with_detector
         .fetch_add(photon_count_with_detector, Relaxed);
-    simulation_statistics
-        .total_efficiency_sum
-        .fetch_add(total_efficiency_sum / 4.0 / std::f64::consts::PI, Relaxed);
+    let solid_angle = photon_emit.get_solid_angle();
+    simulation_statistics.total_efficiency_sum.fetch_add(
+        total_efficiency_sum * (solid_angle / (4.0 * std::f64::consts::PI)),
+        Relaxed,
+    );
     simulation_statistics.total_efficiency_square_sum.fetch_add(
-        total_efficiency_square_sum / 8.0 / std::f64::consts::PI / std::f64::consts::PI,
+        total_efficiency_square_sum
+            * (solid_angle * solid_angle / (16.0 * std::f64::consts::PI * std::f64::consts::PI)),
         Relaxed,
     );
     simulation_statistics

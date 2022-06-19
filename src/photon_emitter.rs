@@ -1,4 +1,4 @@
-use crate::{photon::Photon, rand_gen::RandGen, vec3::Vector};
+use crate::{rand_gen::RandGen, vec3::Vector};
 
 pub struct PhotonEmitter {
     cos_alpha: f64,

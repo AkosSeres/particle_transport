@@ -1,4 +1,4 @@
-use crate::{rand_gen::RandGen, vec3::Vector};
+use crate::{photon::Photon, rand_gen::RandGen, vec3::Vector};
 
 pub struct PhotonEmitter {
     cos_alpha: f64,
@@ -17,7 +17,11 @@ impl PhotonEmitter {
         let bounding_radius = (detector_h * detector_h / 4.0 + detector_r * detector_r).sqrt();
         let dist_from_origo = (rx * rx + ry * ry + rz * rz).sqrt();
         let sin_alpha = bounding_radius / dist_from_origo;
-        let cos_alpha = (1.0 - sin_alpha * sin_alpha).sqrt();
+        let cos_alpha = if sin_alpha >= 1.0 {
+            -1.0
+        } else {
+            (1.0 - sin_alpha * sin_alpha).sqrt()
+        };
         Self {
             cos_alpha,
             mid_dir: (Vector::new(0., 0., 0.) - Vector::new(rx, ry, rz)).normalized(),
@@ -26,6 +30,9 @@ impl PhotonEmitter {
     }
 
     pub fn gen_photon_dir(&self) -> Vector<f64> {
+        if self.cos_alpha == -1.0 {
+            return Vector::random_isotropic_normed();
+        }
         let cos_theta = self.cos_alpha + (1.0 - self.cos_alpha) * f64::rand();
         let mut ret_photon = self.mid_dir.clone();
         ret_photon.rotate_random_by_angle_cosine(cos_theta);

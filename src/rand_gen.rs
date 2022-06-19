@@ -1,9 +1,12 @@
 #[cfg(target_arch = "wasm32")]
 use nanorand::{Rng, WyRand};
 
+/// The rng instance used for in the WASM build.
 #[cfg(target_arch = "wasm32")]
 static mut rng: WyRand = WyRand::new_seed(6454353);
 
+/// Sets the seed for the random number generator
+/// in the WASM build.
 #[cfg(target_arch = "wasm32")]
 pub fn set_rng_seed(seed: u64) {
     unsafe {
@@ -12,8 +15,12 @@ pub fn set_rng_seed(seed: u64) {
 }
 
 pub trait RandGen {
+    /// Generates a uniform random number in the range [0, 1).
     fn rand() -> Self;
 
+    /// Approximately generates a random number with a normal
+    /// distribution with mean 0 and standard deviation 1.
+    /// Uses the simple method, where we sum 12 uniform random numbers.
     fn rand_normal_sum12() -> Self
     where
         Self: num::Float,
@@ -24,6 +31,8 @@ pub trait RandGen {
         (0..12).map(|_| Self::rand()).sum::<Self>() - 6.0.into()
     }
 
+    /// Samples a random number from a normal distribution with mean 0 and
+    /// standard deviation 1 using the Box-Muller method.
     fn rand_normal_box_muller() -> (Self, Self)
     where
         Self: num::Float,

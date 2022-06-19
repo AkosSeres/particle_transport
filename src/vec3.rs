@@ -10,14 +10,15 @@ pub struct Vector<T> {
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Spherical<T> {
     /// The magnitude (radius) of the vector.
-    radius: T,
+    pub radius: T,
     /// Angle of inclination
-    theta: T,
+    pub theta: T,
     /// Azimuthal angle
-    phi: T,
+    pub phi: T,
 }
 
 impl<T> Vector<T> {
+    /// Creates a new Vector from the given Cartesian coordinates.
     pub fn new(x_: T, y_: T, z_: T) -> Vector<T> {
         Vector::<T> {
             x: x_,
@@ -58,6 +59,7 @@ impl<T> Vector<T> {
         }
     }
 
+    /// Dot product of two vectors.
     pub fn dot(&self, other: &Self) -> T
     where
         T: std::ops::Mul<Output = T> + std::ops::Add<Output = T> + Copy,
@@ -65,6 +67,7 @@ impl<T> Vector<T> {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
+    /// The angle between two vectors.
     pub fn angle(&self, other: &Self) -> T
     where
         T: num::traits::Float,
@@ -72,6 +75,9 @@ impl<T> Vector<T> {
         (self.dot(other) / (self.mag() * other.mag())).acos()
     }
 
+    /// The square of the magnitude of the vector.
+    /// This is useful for comparing the magnitude of two vectors,
+    /// because we can avoid the square root function.
     pub fn mag_sq(&self) -> T
     where
         T: std::ops::Mul<Output = T> + std::ops::Add<Output = T> + Copy,
@@ -79,6 +85,7 @@ impl<T> Vector<T> {
         self.x * self.x + self.y + self.y + self.z * self.z
     }
 
+    /// Returns the magnitude of the vector.
     pub fn mag(&self) -> T
     where
         T: std::ops::Mul<Output = T> + std::ops::Add<Output = T> + num::traits::Float,
@@ -86,6 +93,11 @@ impl<T> Vector<T> {
         (self.x * self.x + self.y + self.y + self.z * self.z).sqrt()
     }
 
+    /// Sets the magnitude of the vector to the given value.
+    /// # Arguments
+    /// * `new_mag` - The new magnitude of the vector
+    /// # Comments
+    /// * `new_mag` can be negative, in which case the vector will face in the opposite direction.
     pub fn set_mag(&mut self, new_mag: T)
     where
         T: num::traits::Float,
@@ -93,6 +105,7 @@ impl<T> Vector<T> {
         *self = *self * (new_mag / self.mag());
     }
 
+    /// Sets the magnitude of the vector to 1.
     pub fn normalize(&mut self)
     where
         T: num::traits::Float,
@@ -100,6 +113,7 @@ impl<T> Vector<T> {
         *self = *self / self.mag();
     }
 
+    /// Returns a [normalize][Self::normalize]d copy of the vector.
     pub fn normalized(&self) -> Self
     where
         T: num::traits::Float,
@@ -107,6 +121,11 @@ impl<T> Vector<T> {
         *self / self.mag()
     }
 
+    /// Returns a [normalize][Self::normalize]d random vector,
+    /// with _isotropic_ distribution. In other words, we get a
+    /// uniform random point on the surface of the unit sphere.
+    ///
+    /// The vector is generated using the Marsaglia method.
     pub fn random_isotropic_normed() -> Vector<T>
     where
         T: crate::rand_gen::RandGen + num::traits::Float,
@@ -130,6 +149,8 @@ impl<T> Vector<T> {
         }
     }
 
+    /// Rotates the vector by the given angle, but this rotation happens
+    /// around a random axis that is perpendicular to the vector.
     pub fn rotate_random_by_angle(&mut self, angle: T)
     where
         T: crate::rand_gen::RandGen + num::traits::Float,
@@ -152,6 +173,9 @@ impl<T> Vector<T> {
         *self = new_v;
     }
 
+    /// The same as the [rotate_random_by_angle][Self::rotate_random_by_angle] function,
+    /// but here we give the function the _cosine_ of the angle, so the execution time is
+    /// slightly faster.
     pub fn rotate_random_by_angle_cosine(&mut self, angle_cosine: T)
     where
         T: crate::rand_gen::RandGen + num::traits::Float,
@@ -281,7 +305,9 @@ where
     }
 }
 
+/// Vector of [f32] coordinates.
 pub type Vectorf = Vector<f32>;
+/// Vector of [f64] coordinates.
 pub type Vectord = Vector<f64>;
 
 #[cfg(test)]

@@ -2,8 +2,8 @@
 
 /// This is the main function, which is called if
 /// the build is not running on the web. In the web
-/// build, the [start] function is called instead
-/// from the [`lib.rs`] file.
+/// build, the `start` function is called instead
+/// from the `lib.rs` file.
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     // Create app instance and initialize

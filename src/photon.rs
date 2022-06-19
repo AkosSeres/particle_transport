@@ -1,7 +1,11 @@
 use crate::{rand_gen::RandGen, vec3::Vector};
 
-/// Radius of the detector
+/// Radius of the detector.
+/// The properties of the detector are stored in global
+/// staic variables, so that they can be accessed from
+/// anywhere and defining a struct for it is not needed.
 static mut DET_R: f64 = 2.5;
+/// Radius of the detector squared
 static mut DET_RSQ: f64 = 6.25;
 /// Height of the detector
 static mut DET_HEIGHT: f64 = 3.0;
@@ -29,6 +33,7 @@ pub fn set_detector(r: f64, height: f64, density: f64) {
         DET_DENSITY = density;
     }
 }
+/// Sets the default photon energy so it can be cached
 pub fn set_default_energy(energy: f64) {
     unsafe {
         DEFAULT_ENERGY = energy;
@@ -52,24 +57,14 @@ fn get_detector_density() -> f64 {
     unsafe { DET_DENSITY }
 }
 
-/// Describes what happens to the photon in the simulation step
-pub enum PhotonStep {
-    /// Completely misses the detector
-    Miss,
-    /// Enters the detector
-    Enter,
-    /// The photon transfers energy inside the detector
-    TransferEnergy(f64),
-    /// Exits the detector
-    Exit,
-}
-
+/// Defines the different possible interaction types.
 enum InteractionType {
     ComptonScatter,
     Photoeffect,
     PairProduction,
 }
 
+/// This enum desribes the possible orientations of a photon.
 #[derive(PartialEq, Debug)]
 pub enum PhotonLocation {
     OutsideMisses,
@@ -77,6 +72,16 @@ pub enum PhotonLocation {
     Inside(f64),
 }
 
+/// A struct containing the results of a simulation.
+pub struct SimulationResults {
+    /// The amount of energy transfered by the photon into the charged particles of the detector.
+    pub energy_transfered: f64,
+    /// Whether the photon went through the detector or not.
+    pub hit_detector: bool,
+}
+
+/// Struct representing a photon.
+/// It has energy, position and a direction.
 #[derive(Debug, Copy, Clone)]
 pub struct Photon {
     /// The current energy of the photon in keV
@@ -102,7 +107,8 @@ impl Photon {
         Some((plane_z - self.pos.z) / self.dir.z)
     }
 
-    /// Intersects the path of the photon with the bottom base of the detector and if they intersect, it returns the distance.
+    /// Intersects the path of the photon with the bottom base of the detector cylinder and if they intersect, it returns the distance.
+    /// Otherwise, it returns None.
     pub fn intersect_bottom_base(&self) -> Option<f64> {
         if self.pos.z == get_detector_zbottom() {
             return Some(0.0);
@@ -118,7 +124,8 @@ impl Photon {
         Some(dist)
     }
 
-    /// Intersects the path of the photon with the top base of the detector and if they intersect, it returns the distance.
+    /// Intersects the path of the photon with the top base of the detector cylinder and if they intersect, it returns the distance.
+    /// Otherwise, it returns None.
     pub fn intersect_top_base(&self) -> Option<f64> {
         if self.pos.z == get_detector_ztop() {
             return Some(0.0);
@@ -135,6 +142,7 @@ impl Photon {
     }
 
     /// Intersects the path of the photon with the infinitely extended cylinder of the detector and if they intersect, it returns the distances (both the entering distance and the exit distance as well).
+    /// Otherwise, it returns None.
     pub fn intersect_infinite_cylinder(&self) -> Option<(f64, f64)> {
         let a = self.dir.x * self.dir.x + self.dir.y * self.dir.y;
         let b = 2.0 * (self.pos.x * self.dir.x + self.pos.y * self.dir.y);
@@ -147,7 +155,9 @@ impl Photon {
         Some(((-b - diff) / 2.0 / a, (-b + diff) / 2.0 / a))
     }
 
-    /// Intersects the path of the photon with the cylinder of the detector and if they intersect, it returns the frontal distance
+    /// Intersects the path of the photon with the cylinder of the detector and if they intersect, it returns the closer distance,
+    /// since the further distance is irrelevant.
+    /// Otherwise, it returns None.
     pub fn intersect_cylinder(&self) -> Option<f64> {
         let a = self.dir.x * self.dir.x + self.dir.y * self.dir.y;
         let b = 2.0 * (self.pos.x * self.dir.x + self.pos.y * self.dir.y);
@@ -179,6 +189,7 @@ impl Photon {
         ret_dist
     }
 
+    /// Intersects the photon with the detector and returns the enum describing the location of the photon.
     pub fn intersect_detector(&self) -> PhotonLocation {
         let is_inside = self.pos.x * self.pos.x + self.pos.y * self.pos.y < get_detector_rsq()
             && self.pos.z > get_detector_zbottom()
@@ -220,6 +231,7 @@ impl Photon {
         return PhotonLocation::OutsideMisses;
     }
 
+    /// Samples a random free path length for the photon and and [InteractionType] as well.
     fn sample_free_path_and_interaction_type(&self) -> (f64, InteractionType)
     where
         f64: RandGen,
@@ -293,7 +305,7 @@ impl Photon {
     }
 
     /// Returns all of the cross sections corresponding to the given energy, but this function caches these values
-    /// for the default energy value, unlike _get_cross_sections_
+    /// for the default energy value, unlike [Self::get_cross_sections]. The caching is also done for 511 keV.
     /// The energy must be given in keV, and the tuple conatins the following values in this order:
     /// (cross section of Compton scattering, cross section for fotoeffect, cross section for pair production, sum of all cross sections)
     ///
@@ -311,10 +323,15 @@ impl Photon {
         Self::get_cross_sections(energy)
     }
 
+    /// Moves the photon along its direction by the given distance.
     fn move_by(&mut self, dist: f64) {
         self.pos = self.pos + self.dir * dist;
     }
 
+    /// Samples a direction change for the photon in Compton scattering using the Kahn method.
+    /// Also returns the scattered photon's energy.
+    /// The direction change is an angle of course, but it is more optimal to return the angle's
+    /// cosine.
     fn sample_kahn_method(&self) -> (f64, f64) {
         let lambda = 511.0 / self.energy;
         let rad;
@@ -343,6 +360,9 @@ impl Photon {
         (costheta, post_energy)
     }
 
+    /// Moves the photon inside the volume of the detector.
+    /// If the photon exits the volume, the boolean value of the returned tuple is false.
+    /// Else, the photon gets scattered after the move with a random method (Compton, photo effect, pair production).
     fn move_inside(&mut self, inside_wall_dist: f64) -> (bool, f64) {
         let next_move = self.sample_free_path_and_interaction_type();
         let interaction_type = next_move.1;
@@ -387,7 +407,8 @@ impl Photon {
         }
     }
 
-    /// Simulates the path of the photon, and we return how much energy it gives off to the detector
+    /// Simulates the entire path of the photon, and then returns a [SimulationResults]
+    /// containing how much energy was given off and if the photon went through the detector at all.
     pub fn simulate(&mut self) -> SimulationResults {
         let mut location = self.intersect_detector();
 
@@ -415,13 +436,9 @@ impl Photon {
     }
 }
 
-pub struct SimulationResults {
-    pub energy_transfered: f64,
-    pub hit_detector: bool,
-}
-
 const CROSS_SECTION_DATA_POINTS: usize = 58;
-// Energy dependent cross sections
+// Energy dependent cross sections exported from the XCOM program
+// The energies are in keV, and the cross sections are in cm²/g
 const ENERGIES: [f64; CROSS_SECTION_DATA_POINTS] = [
     1.0, 1.035, 1.072, 1.072, 1.5, 2.0, 3.0, 4.0, 4.557, 4.557, 4.702, 4.852, 4.852, 5.0, 5.188,
     5.188, 6.0, 8.0, 10.0, 15.0, 20.0, 30.0, 33.17, 33.17, 40.0, 50.0, 60.0, 80.0, 100.0, 150.0,

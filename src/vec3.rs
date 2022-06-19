@@ -82,7 +82,7 @@ impl<T> Vector<T> {
     where
         T: std::ops::Mul<Output = T> + std::ops::Add<Output = T> + Copy,
     {
-        self.x * self.x + self.y + self.y + self.z * self.z
+        self.x * self.x + self.y * self.y + self.z * self.z
     }
 
     /// Returns the magnitude of the vector.
@@ -90,7 +90,7 @@ impl<T> Vector<T> {
     where
         T: std::ops::Mul<Output = T> + std::ops::Add<Output = T> + num::traits::Float,
     {
-        (self.x * self.x + self.y + self.y + self.z * self.z).sqrt()
+        (self.x * self.x + self.y * self.y + self.z * self.z).sqrt()
     }
 
     /// Sets the magnitude of the vector to the given value.

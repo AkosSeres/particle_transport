@@ -9,15 +9,18 @@ use eframe::{
     egui::{self, RichText},
     epaint::Color32,
 };
-use std::sync::{
-    atomic::{
-        AtomicBool, AtomicU64,
-        Ordering::{Relaxed, SeqCst},
-    },
-    Arc,
-};
 #[cfg(not(target_arch = "wasm32"))]
 use std::thread;
+use std::{
+    io::Write,
+    sync::{
+        atomic::{
+            AtomicBool, AtomicU64,
+            Ordering::{Relaxed, SeqCst},
+        },
+        Arc,
+    },
+};
 
 /// Simulates the transport of the photons of a monoenergetic gamma-source inside a scintillation detector.
 #[derive(Debug)]
@@ -359,41 +362,40 @@ impl eframe::App for MyApp {
                     } else {
                         format!("{:3.2}/s", rate.round())
                     };
+                    let total_photon_count =
+                        self.simulation_statistics.total_photon_count.load(Relaxed);
+                    let photon_count_with_detector = self
+                        .simulation_statistics
+                        .photon_count_with_detector
+                        .load(Relaxed);
+                    let total_efficiency_sum = self
+                        .simulation_statistics
+                        .total_efficiency_sum
+                        .load(Relaxed);
+                    let total_efficiency_square_sum = self
+                        .simulation_statistics
+                        .total_efficiency_square_sum
+                        .load(Relaxed);
+                    let total_efficiency = total_efficiency_sum / total_photon_count as f64;
+                    let total_efficiency_deviation = (total_efficiency_square_sum
+                        / total_photon_count as f64
+                        - total_efficiency * total_efficiency)
+                        .sqrt();
+                    let intrinsic_efficiency_sum = self
+                        .simulation_statistics
+                        .intrinsic_efficiency_sum
+                        .load(Relaxed);
+                    let intrinsic_efficiency_square_sum = self
+                        .simulation_statistics
+                        .intrinsic_efficiency_square_sum
+                        .load(Relaxed);
+                    let intrinsic_efficiency =
+                        intrinsic_efficiency_sum / photon_count_with_detector as f64;
+                    let intrinsic_efficiency_deviation = (intrinsic_efficiency_square_sum
+                        / photon_count_with_detector as f64
+                        - intrinsic_efficiency * intrinsic_efficiency)
+                        .sqrt();
                     egui::Grid::new("simulation_info").show(ui, |ui| {
-                        let total_photon_count =
-                            self.simulation_statistics.total_photon_count.load(Relaxed);
-                        let photon_count_with_detector = self
-                            .simulation_statistics
-                            .photon_count_with_detector
-                            .load(Relaxed);
-                        let total_efficiency_sum = self
-                            .simulation_statistics
-                            .total_efficiency_sum
-                            .load(Relaxed);
-                        let total_efficiency_square_sum = self
-                            .simulation_statistics
-                            .total_efficiency_square_sum
-                            .load(Relaxed);
-                        let total_efficiency = total_efficiency_sum / total_photon_count as f64;
-                        let total_efficiency_deviation = (total_efficiency_square_sum
-                            / total_photon_count as f64
-                            - total_efficiency * total_efficiency)
-                            .sqrt();
-                        let intrinsic_efficiency_sum = self
-                            .simulation_statistics
-                            .intrinsic_efficiency_sum
-                            .load(Relaxed);
-                        let intrinsic_efficiency_square_sum = self
-                            .simulation_statistics
-                            .intrinsic_efficiency_square_sum
-                            .load(Relaxed);
-                        let intrinsic_efficiency =
-                            intrinsic_efficiency_sum / photon_count_with_detector as f64;
-                        let intrinsic_efficiency_deviation = (intrinsic_efficiency_square_sum
-                            / photon_count_with_detector as f64
-                            - intrinsic_efficiency * intrinsic_efficiency)
-                            .sqrt();
-
                         ui.add(egui::widgets::Label::new(
                             RichText::new("").strong().size(18.0),
                         ));
@@ -481,6 +483,61 @@ impl eframe::App for MyApp {
                         ));
                         ui.end_row();
                     });
+
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if !simulation_running {
+                        ui.vertical_centered(|ui| {
+                            let export_button = egui::widgets::Button::new(
+                                RichText::new("Export to JSON").strong().size(18.0),
+                            );
+                            ui.add_space(15.0);
+                            if ui.add(export_button).clicked() {
+                                let channel_width =
+                                    self.get_max_energy() / (self.channels.len() as f64);
+                                let export_data = json::object! {
+                                    counts: self.channels.iter().map(|channel| {
+                                        channel.load(Relaxed)
+                                    }).collect::<Vec<_>>(),
+                                    energies: (0..self.channels.len()).map(|i| {
+                                        i as f64 * channel_width + channel_width / 2.0
+                                    }).collect::<Vec<_>>(),
+                                    channel_width: channel_width,
+                                    parameters: {
+                                        fwhm: self.arguments.fwhm,
+                                        emitter_position: {
+                                            x: self.arguments.rx,
+                                            y: self.arguments.ry,
+                                            z: self.arguments.rz,
+                                        },
+                                        photon_energy: self.arguments.energy,
+                                        detector_density: self.arguments.density,
+                                        detector_radius: self.arguments.radius,
+                                        detector_height: self.arguments.height,
+                                    },
+                                    statistics: {
+                                        total_photon_count:total_photon_count,
+                                        photon_count_with_detector:photon_count_with_detector,
+                                        hits:hits,
+                                        total_efficiency:total_efficiency,
+                                        total_efficiency_deviation:total_efficiency_deviation,
+                                        intrinsic_efficiency:intrinsic_efficiency,
+                                        intrinsic_efficiency_deviation:intrinsic_efficiency_deviation,
+                                    }
+                                }.to_string();
+
+
+                                let path = rfd::FileDialog::new()
+                                                            .add_filter("json", &["json"])
+                                                            .set_file_name("result.json")
+                                                            .save_file();
+
+                                if let Some(path) = path {
+                                    let mut file = std::fs::File::create(path).unwrap();
+                                    file.write_all(export_data.as_bytes()).expect("Writing the file to disk failed");
+                                };
+                            };
+                        });
+                    }
                 }
             });
 

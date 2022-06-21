@@ -22,23 +22,23 @@ impl PhotonEmitter {
         rz: f64,
     ) -> PhotonEmitter {
         // The bounding radius of the detector
-        let bounding_radius = (detector_h * detector_h / 4.0 + detector_r * detector_r).sqrt();
+        let bounding_radius_sq = detector_h * detector_h / 4.0 + detector_r * detector_r;
         // Distance of the emmitter from the origin
-        let dist_from_origo = (rx * rx + ry * ry + rz * rz).sqrt();
+        let dist_from_origo_sq = rx * rx + ry * ry + rz * rz;
         // The sine of the maximum angle of the emitter
-        let sin_alpha = bounding_radius / dist_from_origo;
+        let sin_alpha_sq = bounding_radius_sq / dist_from_origo_sq;
         // The cossine of that angle
         // If the emitter is inside the bounding sphere of the detector,
         // then the maximum angle shall be 180 degrees, thus `cos_alpha` is -1.0
-        let cos_alpha = if sin_alpha >= 1.0 {
+        let cos_alpha = if sin_alpha_sq >= 1.0 {
             -1.0
         } else {
-            (1.0 - sin_alpha * sin_alpha).sqrt()
+            (1.0 - sin_alpha_sq).sqrt()
         };
         Self {
             cos_alpha,
             // We save the middle direction of emission, since it will be a
-            // good starting point for generating random directions
+            // good starting point for generating the random directions
             mid_dir: (Vector::new(0., 0., 0.) - Vector::new(rx, ry, rz)).normalized(),
             solid_angle: 2.0 * std::f64::consts::PI * (1.0 - cos_alpha),
         }

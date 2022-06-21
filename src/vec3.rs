@@ -166,7 +166,7 @@ impl<T> Vector<T> {
         let coss = theta.cos();
         let sqpart = (u * u + v * v).sqrt();
         let new_v = Self {
-            x: sincos * v / sqpart + u * v * sinsin / sqpart + u * coss,
+            x: sincos * v / sqpart + u * w * sinsin / sqpart + u * coss,
             y: -u * sincos / sqpart + v * w * sinsin / sqpart + v * coss,
             z: -sqpart * sinsin + w * coss,
         };
@@ -191,7 +191,7 @@ impl<T> Vector<T> {
         let coss = theta_cos;
         let sqpart = (u * u + v * v).sqrt();
         let new_v = Self {
-            x: sincos * v / sqpart + u * v * sinsin / sqpart + u * coss,
+            x: sincos * v / sqpart + u * w * sinsin / sqpart + u * coss,
             y: -u * sincos / sqpart + v * w * sinsin / sqpart + v * coss,
             z: -sqpart * sinsin + w * coss,
         };

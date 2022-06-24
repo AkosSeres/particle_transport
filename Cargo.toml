@@ -38,3 +38,6 @@ criterion = "0.3"
 
 [profile.release]
 codegen-units = 1
+strip = true
+lto = true
+panic = "abort"

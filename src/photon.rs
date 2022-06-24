@@ -198,16 +198,15 @@ impl Photon {
         let mut process_any_dist = |d_opt: Option<f64>| match d_opt {
             None => {}
             Some(new_d) => {
-                if new_d > 0.0 {
-                    if forward_dist.is_none() {
+                if new_d <= 0.0 {
+                    return;
+                }
+                if let Some(old_d) = forward_dist {
+                    if old_d > new_d {
                         forward_dist = Some(new_d);
-                    } else {
-                        unsafe {
-                            if forward_dist.unwrap_unchecked() > new_d {
-                                forward_dist = Some(new_d);
-                            }
-                        }
                     }
+                } else {
+                    forward_dist = Some(new_d);
                 }
             }
         };
@@ -217,16 +216,12 @@ impl Photon {
         process_any_dist(self.intersect_top_base());
         process_any_dist(self.intersect_cylinder());
 
-        if forward_dist.is_some() {
-            if is_inside {
-                unsafe {
-                    return PhotonLocation::Inside(forward_dist.unwrap_unchecked());
-                }
+        if let Some(forward_dist) = forward_dist {
+            return if is_inside {
+                PhotonLocation::Inside(forward_dist)
             } else {
-                unsafe {
-                    return PhotonLocation::OutsideInto(forward_dist.unwrap_unchecked());
-                }
-            }
+                PhotonLocation::OutsideInto(forward_dist)
+            };
         }
         return PhotonLocation::OutsideMisses;
     }
